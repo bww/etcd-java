@@ -73,14 +73,17 @@ public class Config {
   
   private static final Logger logger = Logger.getLogger(Config.class.getName());
   
-  private static final String ENCODING            = "UTF-8";
-  private static final String HEADER_CONTENT_TYPE = "Content-Type";
-  private static final String CONTENT_TYPE_JSON   = "application/json";
-  private static final String CONTENT_TYPE_FORM   = "application/x-www-form-urlencoded";
-  private static final Gson   GSON                = new Gson();
+  private static final String ENCODING                = "UTF-8";
+  private static final String HEADER_CONTENT_TYPE     = "Content-Type";
+  private static final String CONTENT_TYPE_JSON       = "application/json";
+  private static final String CONTENT_TYPE_FORM       = "application/x-www-form-urlencoded";
+  private static final Gson   GSON                    = new Gson();
   
-  private String  _host;
-  private int     _port;
+  private static final int            REQUEST_TIMEOUT = 3 * 1000;
+  private static final RequestConfig  REQUEST_CONFIG  = RequestConfig.custom().setSocketTimeout(REQUEST_TIMEOUT).setConnectTimeout(REQUEST_TIMEOUT).setConnectionRequestTimeout(REQUEST_TIMEOUT).build();
+  
+  private final String  _host;
+  private final int     _port;
   
   /**
    * Construct a configuration with the specified host for the etcd server
@@ -96,7 +99,7 @@ public class Config {
    */
   public Config(String host, int port) {
     if((_host = host) == null || _host.isEmpty()) throw new IllegalArgumentException("Etcd server host is invalid");
-    if((_port = port) <= 0) _port = 4001;
+    _port = (port <= 0) ? 4001 : port;
   }
   
   /**
@@ -130,10 +133,11 @@ public class Config {
    */
   public class Value <V> {
     
-    private String  _path;
-    private URI     _valueURL;
-    private URI     _watchURL;
-    private V       _value;
+    private String              _path;
+    private URI                 _valueURL;
+    private URI                 _watchURL;
+    private Map<String, Object> _node;
+    private V                   _value;
     
     /**
      * Construct a configuration value with the specified path
@@ -156,7 +160,7 @@ public class Config {
      * Obtain the current value
      */
     public V get() throws IOException {
-      return __get();//(_value == null) ? __get() : _value;
+      return (_value == null) ? __get() : _value;
     }
     
     /**
@@ -173,18 +177,9 @@ public class Config {
       // send our request and process the response
       try {
         
-        // request timeout
-        int timeout = 3 * 1000;
-        // setup our client configuration
-        RequestConfig requestConfig = RequestConfig.custom()
-          .setSocketTimeout(timeout)
-          .setConnectTimeout(timeout)
-          .setConnectionRequestTimeout(timeout)
-          .build();
-        
         // create our client
         client = HttpClientBuilder.create()
-          .setDefaultRequestConfig(requestConfig)
+          .setDefaultRequestConfig(REQUEST_CONFIG)
           .build();
         
         // send our request
@@ -202,7 +197,10 @@ public class Config {
           throw new IOException("Etcd response contains no data");
         }
         
-        valueForEntity(entity);
+        // update with the value returned from the service
+        _value = valueForEntity(entity);
+        // return the canonical value
+        return _value;
         
       }catch(IOException e){
         throw e;
@@ -215,21 +213,20 @@ public class Config {
         client.close();
       }
       
-      return null;
     }
     
     /**
      * Set the current value
      */
-    public void set(V value) throws IOException {
+    public V set(V value) throws IOException {
       _value = value;
-      __set(value);
+      return __set(value);
     }
     
     /**
      * Update the current value
      */
-    protected void __set(V value) throws IOException {
+    protected V __set(V value) throws IOException {
       CloseableHttpClient client = null;
       HttpPut put;
       
@@ -241,24 +238,15 @@ public class Config {
       // setup our put request
       put = new HttpPut(_valueURL);
       put.setHeader(HEADER_CONTENT_TYPE, CONTENT_TYPE_FORM);
-      put.setEntity(new StringEntity(GSON.toJson(update)));
+      put.setEntity(new StringEntity(update));
       logger.debug(String.valueOf(put));
       
       // send our request and process the response
       try {
         
-        // request timeout
-        int timeout = 3 * 1000;
-        // setup our client configuration
-        RequestConfig requestConfig = RequestConfig.custom()
-          .setSocketTimeout(timeout)
-          .setConnectTimeout(timeout)
-          .setConnectionRequestTimeout(timeout)
-          .build();
-        
         // create our client
         client = HttpClientBuilder.create()
-          .setDefaultRequestConfig(requestConfig)
+          .setDefaultRequestConfig(REQUEST_CONFIG)
           .build();
         
         // send our request
@@ -276,7 +264,10 @@ public class Config {
           throw new IOException("Etcd response contains no data");
         }
         
-        valueForEntity(entity);
+        // update with the value returned from the service
+        _value = valueForEntity(entity);
+        // return the canonical value
+        return _value;
         
       }catch(IOException e){
         throw e;
@@ -297,8 +288,17 @@ public class Config {
     private V valueForEntity(HttpEntity entity) throws IOException {
       Type type = new TypeToken<Map<String, Object>>(){}.getType();
       Map<String, Object> content = GSON.fromJson(new InputStreamReader(entity.getContent(), ENCODING), type);
-      System.err.println("OK: "+ content);
-      return null;
+      List<Map<String, Object>> subnodes;
+      Map<String, Object> node;
+      
+      if((subnodes = (List<Map<String, Object>>)content.get("nodes")) != null){
+        throw new IOException("Directory nodes are not supported");
+      }else if((node = (Map<String, Object>)content.get("node")) != null){
+        return (V)node.get("value");
+      }else{
+        throw new IOException("Invalid node");
+      }
+      
     }
     
     /**
