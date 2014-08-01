@@ -42,6 +42,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
 
+import org.apache.log4j.Logger;
+
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -51,6 +53,7 @@ import org.apache.http.message.BasicNameValuePair;
 
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.utils.URLEncodedUtils;
@@ -67,6 +70,8 @@ import java.lang.reflect.Type;
  * A configuration backed by an etcd service.
  */
 public class Config {
+  
+  private static final Logger logger = Logger.getLogger(Config.class.getName());
   
   private static final String ENCODING            = "UTF-8";
   private static final String HEADER_CONTENT_TYPE = "Content-Type";
@@ -163,7 +168,7 @@ public class Config {
       
       // setup our get request
       get = new HttpGet(_valueURL);
-      System.err.println(get);
+      logger.debug(get);
       
       // send our request and process the response
       try {
@@ -199,6 +204,8 @@ public class Config {
         
         valueForEntity(entity);
         
+      }catch(IOException e){
+        throw e;
       }catch(Exception e){
         throw new IOException("Etcd request failed: "+ get, e);
       }finally{
@@ -224,19 +231,18 @@ public class Config {
      */
     protected void __set(V value) throws IOException {
       CloseableHttpClient client = null;
-      HttpPost post;
+      HttpPut put;
       
       // our value
       List<NameValuePair> params = new ArrayList<NameValuePair>();
       params.add(new BasicNameValuePair("value", String.valueOf(value)));
       String update = URLEncodedUtils.format(params, ENCODING);
       
-      // setup our post request
-      post = new HttpPost(_valueURL);
-      post.setHeader(HEADER_CONTENT_TYPE, CONTENT_TYPE_FORM);
-      post.setEntity(new StringEntity(GSON.toJson(update)));
-      
-      System.err.println(String.valueOf(post));
+      // setup our put request
+      put = new HttpPut(_valueURL);
+      put.setHeader(HEADER_CONTENT_TYPE, CONTENT_TYPE_FORM);
+      put.setEntity(new StringEntity(GSON.toJson(update)));
+      logger.debug(String.valueOf(put));
       
       // send our request and process the response
       try {
@@ -256,7 +262,7 @@ public class Config {
           .build();
         
         // send our request
-        HttpResponse response = client.execute(post);
+        HttpResponse response = client.execute(put);
         
         // check out status code
         int status;
@@ -272,11 +278,13 @@ public class Config {
         
         valueForEntity(entity);
         
+      }catch(IOException e){
+        throw e;
       }catch(Exception e){
-        throw new IOException("Etcd request failed: "+ post, e);
+        throw new IOException("Etcd request failed: "+ put, e);
       }finally{
         // release our connection
-        post.releaseConnection();
+        put.releaseConnection();
         // close our client
         client.close();
       }
