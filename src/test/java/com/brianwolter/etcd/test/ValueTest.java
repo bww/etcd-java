@@ -82,6 +82,7 @@ public class ValueTest {
     System.err.println(value.set(123));
     System.err.println(value.get());
     System.err.println(value.watch().get());
+    System.err.println(value.get());
   }
   
 }

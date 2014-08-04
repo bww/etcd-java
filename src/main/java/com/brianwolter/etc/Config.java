@@ -53,7 +53,7 @@ import com.google.common.util.concurrent.FutureCallback;
 public class Config {
   
   private static final Logger           logger    = Logger.getLogger(Config.class.getName());
-  private static final ExecutorService  executor  = Executors.newFixedThreadPool(1);
+  private static final ExecutorService  executor  = Executors.newSingleThreadExecutor();
   
   protected final List<Provider> _providers;
   
