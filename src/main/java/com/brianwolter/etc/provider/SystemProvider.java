@@ -28,47 +28,36 @@
 // OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-package com.brianwolter.etc;
+package com.brianwolter.etc.provider;
+
+import java.io.IOException;
+
+import org.apache.log4j.Logger;
+
+import com.google.common.util.concurrent.ListenableFuture;
+
+import com.brianwolter.etc.Provider;
 
 /**
- * Base config exception.
+ * System provider.
  */
-public class ConfigException extends java.lang.Exception {
+public class SystemProvider implements Provider.Observable, Provider.Mutable {
+  
+  private static final Logger logger = Logger.getLogger(SystemProvider.class.getName());
   
   /**
-   * Construct with no information
+   * Obtain a configuration value.
    */
-  public ConfigException(){
-    super();
+  public Object get(final String key) throws IOException {
+    return System.getProperty(key);
   }
   
   /**
-   * Construct with a message describing the exception.
-   * 
-   * @param m the message
+   * Set a configuration value.
    */
-  public ConfigException(String m){
-    super(m);
-  }
-  
-  /**
-   * Construct with a message describing the exception and a root exception from
-   * which this originated.
-   * 
-   * @param m the message
-   * @param e the root exception
-   */
-  public ConfigException(String m, Throwable e){
-    super(m, e);
-  }
-  
-  /**
-   * Construct with a root exception from which this exception originated.
-   * 
-   * @param e the root exception
-   */
-  public ConfigException(Throwable e){
-    super(e);
+  public Object set(final String key, final Object value) throws IOException {
+    System.setProperty(key, String.valueOf(value));
+    return value;
   }
   
 }

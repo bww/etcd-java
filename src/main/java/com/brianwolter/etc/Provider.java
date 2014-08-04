@@ -12,9 +12,9 @@
 //     this list of conditions and the following disclaimer in the documentation
 //     and/or other materials provided with the distribution.
 //     
-//   * Neither the names of Brian William Wolter, Wolter Group New York, nor the
-//     names of its contributors may be used to endorse or promote products derived
-//     from this software without specific prior written permission.
+//   * Neither the name of Brian William Wolter nor the names of the contributors
+//     may be used to endorse or promote products derived from this software without
+//     specific prior written permission.
 //     
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
 // ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -40,19 +40,40 @@ import com.google.common.util.concurrent.ListenableFuture;
 public interface Provider {
   
   /**
-   * Obtain a configuration value.
+   * Implemented by observable provdiers
    */
-  public Object get(final String key) throws IOException;
+  public static interface Observable extends Provider {
+    
+    /**
+     * Obtain a configuration value.
+     */
+    public Object get(final String key) throws IOException;
+    
+  }
   
   /**
-   * Set a configuration value. Not all providers implement this method.
+   * Implemented by mutable provdiers
    */
-  public Object set(final String key, final Object value) throws IOException;
+  public static interface Mutable extends Provider {
+    
+    /**
+     * Set a configuration value. Not all providers implement this method.
+     */
+    public Object set(final String key, final Object value) throws IOException;
+    
+  }
   
   /**
-   * Watch a value for changes. Not all providers implement this method.
+   * Implemented by mutable provdiers
    */
-  public ListenableFuture watch(final String key) throws IOException;
-  
+  public static interface Monitorable extends Mutable {
+    
+    /**
+     * Watch a value for changes. Not all providers implement this method.
+     */
+    public ListenableFuture watch(final String key) throws IOException;
+    
+  }
+    
 }
 

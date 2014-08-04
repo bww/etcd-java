@@ -12,9 +12,9 @@
 //     this list of conditions and the following disclaimer in the documentation
 //     and/or other materials provided with the distribution.
 //     
-//   * Neither the names of Brian William Wolter, Wolter Group New York, nor the
-//     names of its contributors may be used to endorse or promote products derived
-//     from this software without specific prior written permission.
+//   * Neither the name of Brian William Wolter nor the names of the contributors
+//     may be used to endorse or promote products derived from this software without
+//     specific prior written permission.
 //     
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
 // ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -81,7 +81,7 @@ import com.brianwolter.etc.Provider;
 /**
  * Etcd provider.
  */
-public class EtcdProvider implements Provider {
+public class EtcdProvider implements Provider.Observable, Provider.Mutable, Provider.Monitorable {
   
   private static final Logger logger = Logger.getLogger(EtcdProvider.class.getName());
   
@@ -91,25 +91,44 @@ public class EtcdProvider implements Provider {
   private static final String CONTENT_TYPE_FORM       = "application/x-www-form-urlencoded";
   private static final Gson   GSON                    = new Gson();
   
-  private final CloseableHttpAsyncClient httpclient;
+  private final CloseableHttpAsyncClient  _httpclient;
+  private final String                    _host;
+  private final int                       _port;
   
   /**
-   * Construcuct
+   * Construct
    */
   public EtcdProvider() {
-    int requestTimeout = 3 * 1000;
+    this("localhost");
+  }
+  
+  /**
+   * Construct
+   */
+  public EtcdProvider(String host) {
+    this(host, 0);
+  }
+  
+  /**
+   * Construct
+   */
+  public EtcdProvider(String host, int port) {
     
+    if((_host = host) == null || _host.isEmpty()) throw new IllegalArgumentException("Etcd server host is invalid");
+    _port = (port <= 0) ? 4001 : port;
+    
+    int requestTimeout = 60 * 1000;
     RequestConfig requestConfig = RequestConfig.custom()
       .setSocketTimeout(requestTimeout)
       .setConnectTimeout(requestTimeout)
       .setConnectionRequestTimeout(requestTimeout)
       .build();
     
-    httpclient = HttpAsyncClients.custom()
+    _httpclient = HttpAsyncClients.custom()
       .setDefaultRequestConfig(requestConfig)
       .build();
     
-    httpclient.start();
+    _httpclient.start();
     
   }
   
@@ -117,7 +136,14 @@ public class EtcdProvider implements Provider {
    * Close the HTTP client
    */
   protected void finalize() throws Throwable {
-    httpclient.close();
+    _httpclient.close();
+  }
+  
+  /**
+   * Determine if this provider is mutable or not
+   */
+  public boolean isMutable() {
+    return true;
   }
   
   /**
@@ -127,7 +153,7 @@ public class EtcdProvider implements Provider {
     HttpGet get;
     
     try {
-      get = new HttpGet(new URI("http", null, "localhost", 4001, String.format("/v2/keys/%s", trimLeadingSlash(key)), null, null));
+      get = new HttpGet(new URI("http", null, _host, _port, String.format("/v2/keys/%s", trimLeadingSlash(key)), null, null));
     }catch(URISyntaxException e){
       throw new IOException(e);
     }
@@ -165,7 +191,7 @@ public class EtcdProvider implements Provider {
   }
   
   /**
-   * Set a configuration value. Not all providers must implement this method.
+   * Set a configuration value.
    */
   public Object set(final String key, final Object value) throws IOException {
     HttpPut put;
@@ -176,7 +202,7 @@ public class EtcdProvider implements Provider {
     String update = URLEncodedUtils.format(params, ENCODING);
     
     try {
-      put = new HttpPut(new URI("http", null, "localhost", 4001, String.format("/v2/keys/%s", trimLeadingSlash(key)), null, null));
+      put = new HttpPut(new URI("http", null, _host, _port, String.format("/v2/keys/%s", trimLeadingSlash(key)), null, null));
     }catch(URISyntaxException e){
       throw new IOException(e);
     }
@@ -223,7 +249,7 @@ public class EtcdProvider implements Provider {
   public ListenableFuture watch(final String key) throws IOException {
     try {
       final SettableFuture future = SettableFuture.create();
-      watch(key, new URI("http", null, "localhost", 4001, String.format("/v2/keys/%s", trimLeadingSlash(key)), "wait=true", null), null, future);
+      watch(key, new URI("http", null, _host, _port, String.format("/v2/keys/%s", trimLeadingSlash(key)), "wait=true", null), null, future);
       return future;
     }catch(URISyntaxException e){
       throw new IOException(e);
@@ -241,7 +267,7 @@ public class EtcdProvider implements Provider {
     logger.debug(get);
     
     // send our request asynchronously
-    httpclient.execute(get, new FutureCallback<HttpResponse>() {
+    _httpclient.execute(get, new FutureCallback<HttpResponse>() {
       
       public void completed(HttpResponse response) {
         try {
@@ -266,7 +292,6 @@ public class EtcdProvider implements Provider {
       
       public void failed(Exception e) {
         if(e instanceof java.net.SocketTimeoutException){
-          logger.error("TIMEOUT", e);
           EtcdProvider.this.watch(key, uri, until, future);
         }else{
           future.setException(e);
@@ -286,7 +311,7 @@ public class EtcdProvider implements Provider {
    */
   private ListenableFuture<HttpResponse> executeRequest(HttpUriRequest request) throws IOException {
     final SettableFuture<HttpResponse> future = SettableFuture.create();
-    httpclient.execute(request, new FutureCallback<HttpResponse>() {
+    _httpclient.execute(request, new FutureCallback<HttpResponse>() {
       public void completed(HttpResponse result) {
         future.set(result);
       }
@@ -339,6 +364,13 @@ public class EtcdProvider implements Provider {
       default:
         throw new IOException(String.format("[%s] Etcd responded with an unexpected response code: %d", key, status));
     }
+  }
+  
+  /**
+   * Convert a configuration key to an etcd path
+   */
+  private String keyToPath(String key) {
+    return null;
   }
   
   /**

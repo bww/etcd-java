@@ -43,6 +43,7 @@ import com.google.common.util.concurrent.FutureCallback;
 
 import com.brianwolter.etc.Config;
 import com.brianwolter.etc.provider.EtcdProvider;
+import com.brianwolter.etc.provider.SystemProvider;
 
 /**
  * Tests
@@ -51,7 +52,7 @@ public class ValueTest {
   
   @Test
   public void testEtcdProvider() throws Exception {
-    ExecutorService executor = Executors.newFixedThreadPool(10);
+    //ExecutorService executor = Executors.newFixedThreadPool(10);
     
     EtcdProvider provider = new EtcdProvider();
     System.err.println(provider.get("test/1"));
@@ -75,12 +76,12 @@ public class ValueTest {
   
   @Test
   public void testValues() throws Exception {
-    /*
-    Config config = new Config("localhost");
+    Config config = new Config(new SystemProvider(), new EtcdProvider());
     Config.Value value = config.get("test/1");
-    value.set(123);
-    value.get();
-    */
+    System.err.println(config.get("test.property").get());
+    System.err.println(value.set(123));
+    System.err.println(value.get());
+    System.err.println(value.watch().get());
   }
   
 }

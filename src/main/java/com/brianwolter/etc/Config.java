@@ -12,9 +12,9 @@
 //     this list of conditions and the following disclaimer in the documentation
 //     and/or other materials provided with the distribution.
 //     
-//   * Neither the names of Brian William Wolter, Wolter Group New York, nor the
-//     names of its contributors may be used to endorse or promote products derived
-//     from this software without specific prior written permission.
+//   * Neither the name of Brian William Wolter nor the names of the contributors
+//     may be used to endorse or promote products derived from this software without
+//     specific prior written permission.
 //     
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
 // ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -31,89 +31,39 @@
 package com.brianwolter.etc;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 
-import java.net.URI;
-import java.net.URISyntaxException;
-
-import java.util.Map;
-import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Arrays;
+import java.util.Collections;
 
 import org.apache.log4j.Logger;
 
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.NameValuePair;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.message.BasicNameValuePair;
-
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPut;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.utils.URLEncodedUtils;
-
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.impl.client.CloseableHttpClient;
-
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import java.lang.reflect.Type;
+import com.google.common.util.concurrent.ListenableFuture;
 
 /**
- * A configuration backed by an etcd service.
+ * A configuration.
  */
 public class Config {
   
   private static final Logger logger = Logger.getLogger(Config.class.getName());
   
-  private static final String ENCODING                = "UTF-8";
-  private static final String HEADER_CONTENT_TYPE     = "Content-Type";
-  private static final String CONTENT_TYPE_JSON       = "application/json";
-  private static final String CONTENT_TYPE_FORM       = "application/x-www-form-urlencoded";
-  private static final Gson   GSON                    = new Gson();
-  
-  private static final int            REQUEST_TIMEOUT = 3 * 1000;
-  private static final RequestConfig  REQUEST_CONFIG  = RequestConfig.custom().setSocketTimeout(REQUEST_TIMEOUT).setConnectTimeout(REQUEST_TIMEOUT).setConnectionRequestTimeout(REQUEST_TIMEOUT).build();
-  
-  private final String  _host;
-  private final int     _port;
+  protected final List<Provider> _providers;
   
   /**
-   * Construct a configuration with the specified host for the etcd server
-   * it will interact with.
+   * Construct with providers
    */
-  public Config(String host) {
-    this(host, 0);
+  public Config(Provider... providers) {
+    this(Arrays.asList(providers));
   }
   
   /**
-   * Construct a configuration with the specified host and port for the etcd server
-   * it will interact with.
+   * Construct with providers
    */
-  public Config(String host, int port) {
-    if((_host = host) == null || _host.isEmpty()) throw new IllegalArgumentException("Etcd server host is invalid");
-    _port = (port <= 0) ? 4001 : port;
-  }
-  
-  /**
-   * Obtain the etcd server host that backs this configuration
-   */
-  public String getServiceHost() {
-    return _host;
-  }
-  
-  /**
-   * Obtain the etcd server port that backs this configuration
-   */
-  public int getServicePort() {
-    return _port;
+  public Config(Collection<Provider> providers) {
+    if(providers == null || providers.isEmpty()) throw new IllegalArgumentException("Providers must not be null or empty");
+    _providers = Collections.unmodifiableList(new ArrayList<Provider>(providers));
   }
   
   /**
@@ -121,11 +71,49 @@ public class Config {
    * before the value is returned. The value itself manages interacting with the etcd service
    * by lazily fetching values as needed.
    * 
-   * @param path the configuration value path. This is the path to the value excluding the implied '/v2/keys' prefix.
-   * @return a configuration value representing the specified path
+   * @param key the configuration value key
+   * @return a configuration value representing the specified key
    */
-  public Value get(String path) throws IOException {
-    return this.new Value(path);
+  public Value get(String key) throws IOException {
+    return this.new Value(key);
+  }
+  
+  /**
+   * Obtain the value for the specified key from the first provider which defines one.
+   */
+  protected Object __get(String key) throws IOException {
+    Object value = null;
+    for(Provider provider : _providers){
+      if(provider instanceof Provider.Observable){
+        if((value = ((Provider.Observable)provider).get(key)) != null){
+          break;
+        }
+      }
+    }
+    return value;
+  }
+  
+  /**
+   * Set a value for the specified key in all mutable providers.
+   */
+  protected void __set(String key, Object value) throws IOException {
+    for(Provider provider : _providers){
+      if(provider instanceof Provider.Mutable){
+        ((Provider.Mutable)provider).set(key, value);
+      }
+    }
+  }
+  
+  /**
+   * Watch the value for the specified key on the first monitorable provider.
+   */
+  protected ListenableFuture __watch(String key) throws IOException {
+    for(Provider provider : _providers){
+      if(provider instanceof Provider.Monitorable){
+        return ((Provider.Monitorable)provider).watch(key);
+      }
+    }
+    return null;
   }
   
   /**
@@ -133,210 +121,36 @@ public class Config {
    */
   public class Value <V> {
     
-    private String              _path;
-    private URI                 _valueURL;
-    private URI                 _watchURL;
-    private Map<String, Object> _node;
-    private V                   _value;
+    private String _key;
+    private V      _value;
     
     /**
-     * Construct a configuration value with the specified path
+     * Construct a configuration value with the specified key
      */
-    protected Value(String path) throws IOException {
-      
-      path = trimLeadingSlash(path);
-      if((_path = path) == null || _path.isEmpty()) throw new IllegalArgumentException("Configuration value path is invalid");
-      
-      try {
-        _valueURL = new URI("http", null, Config.this.getServiceHost(), Config.this.getServicePort(), String.format("/v2/keys/%s", path), null, null);
-        _watchURL = new URI("http", null, Config.this.getServiceHost(), Config.this.getServicePort(), String.format("/v2/keys/%s", path), "wait=true", null);
-      }catch(URISyntaxException e){
-        throw new IOException("Could not build endpoint URLs", e);
-      }
-      
+    protected Value(String key) throws IOException {
+      _key = key;
     }
     
     /**
      * Obtain the current value
      */
     public V get() throws IOException {
-      return (_value == null) ? __get() : _value;
-    }
-    
-    /**
-     * Update the current value
-     */
-    protected V __get() throws IOException {
-      /*
-      CloseableHttpClient client = null;
-      HttpGet get;
-      
-      // setup our get request
-      get = new HttpGet(_valueURL);
-      logger.debug(get);
-      
-      // send our request and process the response
-      try {
-        
-        // create our client
-        client = HttpClientBuilder.create()
-          .setDefaultRequestConfig(REQUEST_CONFIG)
-          .build();
-        
-        // send our request
-        HttpResponse response = client.execute(get);
-        
-        // check out status code
-        int status;
-        if((status = response.getStatusLine().getStatusCode()) != 200){
-          invalidStatus(status);
-        }
-        
-        // obtain our response entity
-        HttpEntity entity;
-        if((entity = response.getEntity()) == null){
-          throw new IOException("Etcd response contains no data");
-        }
-        
-        // update with the value returned from the service
-        _value = valueForEntity(entity);
-        // return the canonical value
-        return _value;
-        
-      }catch(IOException e){
-        throw e;
-      }catch(Exception e){
-        throw new IOException("Etcd request failed: "+ get, e);
-      }finally{
-        // release our connection
-        get.releaseConnection();
-        // close our client
-        client.close();
-      }
-      */
-      return null;
+      return (V)Config.this.__get(_key);
     }
     
     /**
      * Set the current value
      */
     public V set(V value) throws IOException {
-      _value = value;
-      return __set(value);
+      Config.this.__set(_key, value);
+      return (_value = (V)value);
     }
     
     /**
-     * Update the current value
+     * Monitor the current value
      */
-    protected V __set(V value) throws IOException {
-      /*
-      CloseableHttpClient client = null;
-      HttpPut put;
-      
-      // our value
-      List<NameValuePair> params = new ArrayList<NameValuePair>();
-      params.add(new BasicNameValuePair("value", String.valueOf(value)));
-      String update = URLEncodedUtils.format(params, ENCODING);
-      
-      // setup our put request
-      put = new HttpPut(_valueURL);
-      put.setHeader(HEADER_CONTENT_TYPE, CONTENT_TYPE_FORM);
-      put.setEntity(new StringEntity(update));
-      logger.debug(String.valueOf(put));
-      
-      // send our request and process the response
-      try {
-        
-        // create our client
-        client = HttpClientBuilder.create()
-          .setDefaultRequestConfig(REQUEST_CONFIG)
-          .build();
-        
-        // send our request
-        HttpResponse response = client.execute(put);
-        
-        // check out status code
-        int status;
-        if((status = response.getStatusLine().getStatusCode()) != 200 && status != 201){
-          invalidStatus(status);
-        }
-        
-        // obtain our response entity
-        HttpEntity entity;
-        if((entity = response.getEntity()) == null){
-          throw new IOException("Etcd response contains no data");
-        }
-        
-        // update with the value returned from the service
-        _value = valueForEntity(entity);
-        // return the canonical value
-        return _value;
-        
-      }catch(IOException e){
-        throw e;
-      }catch(Exception e){
-        throw new IOException("Etcd request failed: "+ put, e);
-      }finally{
-        // release our connection
-        put.releaseConnection();
-        // close our client
-        client.close();
-      }
-      */
-      return null;
-    }
-    
-    /**
-     * Obtain a value from the specified entity
-     */
-    private V valueForEntity(HttpEntity entity) throws IOException {
-      Type type = new TypeToken<Map<String, Object>>(){}.getType();
-      Map<String, Object> content = GSON.fromJson(new InputStreamReader(entity.getContent(), ENCODING), type);
-      List<Map<String, Object>> subnodes;
-      Map<String, Object> node;
-      
-      if((subnodes = (List<Map<String, Object>>)content.get("nodes")) != null){
-        throw new IOException("Directory nodes are not supported");
-      }else if((node = (Map<String, Object>)content.get("node")) != null){
-        return (V)node.get("value");
-      }else{
-        throw new IOException("Invalid node");
-      }
-      
-    }
-    
-    /**
-     * Report an invalid status
-     */
-    private void invalidStatus(int status) throws IOException {
-      switch(status){
-        case 400:
-          throw new IOException(String.format("[%s] Invalid request", _path));
-        case 401:
-          throw new IOException(String.format("[%s] Unauthorized", _path));
-        case 403:
-          throw new IOException(String.format("[%s] Forbidden", _path));
-        case 404:
-          throw new IOException(String.format("[%s] No such key", _path));
-        case 422:
-          throw new IOException(String.format("[%s] Invalid request", _path));
-        case 500:
-          throw new IOException(String.format("[%s] Etcd service error", _path));
-        default:
-          throw new IOException(String.format("[%s] Etcd responded with an unexpected response code: %d", _path, status));
-      }
-    }
-    
-    /**
-     * Strip off leading '/' from a path
-     */
-    private String trimLeadingSlash(String path) {
-      for(int i = 0; i < path.length(); i++){
-        if(path.charAt(i) != '/'){
-          return path.substring(i);
-        }
-      }
-      return new String();
+    public ListenableFuture<V> watch() throws IOException {
+      return Config.this.__watch(_key);
     }
     
   }
