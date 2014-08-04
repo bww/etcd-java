@@ -41,7 +41,7 @@ import com.brianwolter.etc.Provider;
 /**
  * System provider.
  */
-public class SystemProvider implements Provider.Observable, Provider.Mutable {
+public class SystemProvider implements Provider.Observable {
   
   private static final Logger logger = Logger.getLogger(SystemProvider.class.getName());
   
@@ -50,14 +50,6 @@ public class SystemProvider implements Provider.Observable, Provider.Mutable {
    */
   public Object get(final String key) throws IOException {
     return System.getProperty(key);
-  }
-  
-  /**
-   * Set a configuration value.
-   */
-  public Object set(final String key, final Object value) throws IOException {
-    System.setProperty(key, String.valueOf(value));
-    return value;
   }
   
 }
