@@ -28,7 +28,7 @@
 // OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-package com.brianwolter.etcd;
+package com.brianwolter.etc;
 
 /**
  * Base config exception.

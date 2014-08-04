@@ -28,60 +28,31 @@
 // OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-package com.brianwolter.etc.test;
+package com.brianwolter.etc;
 
-import static org.testng.Assert.*;
+import java.io.IOException;
 
-import org.testng.annotations.Test;
-
-import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutorService;
-
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.FutureCallback;
-
-import com.brianwolter.etc.Config;
-import com.brianwolter.etc.provider.EtcdProvider;
 
 /**
- * Tests
+ * Implemented by configuration providers.
  */
-public class ValueTest {
+public interface Provider {
   
-  @Test
-  public void testEtcdProvider() throws Exception {
-    ExecutorService executor = Executors.newFixedThreadPool(10);
-    
-    EtcdProvider provider = new EtcdProvider();
-    System.err.println(provider.get("test/1"));
-    System.err.println(provider.set("test/1", "Hello again..."));
-    
-    ListenableFuture future = provider.watch("test/1");
-    System.err.println(future.get());
-    
-    /*
-    Futures.addCallback(future, new FutureCallback() {
-      public void onSuccess(Object value) {
-        System.err.println("OK NOW: "+ value);
-      }
-      public void onFailure(Throwable thrown) {
-        System.err.println("YARP: "+ thrown);
-      }
-    }, executor);
-    */
-    
-  }
+  /**
+   * Obtain a configuration value.
+   */
+  public Object get(final String key) throws IOException;
   
-  @Test
-  public void testValues() throws Exception {
-    /*
-    Config config = new Config("localhost");
-    Config.Value value = config.get("test/1");
-    value.set(123);
-    value.get();
-    */
-  }
+  /**
+   * Set a configuration value. Not all providers implement this method.
+   */
+  public Object set(final String key, final Object value) throws IOException;
+  
+  /**
+   * Watch a value for changes. Not all providers implement this method.
+   */
+  public ListenableFuture watch(final String key) throws IOException;
   
 }
 

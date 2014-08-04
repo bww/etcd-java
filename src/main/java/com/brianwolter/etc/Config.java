@@ -28,7 +28,7 @@
 // OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-package com.brianwolter.etcd;
+package com.brianwolter.etc;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -167,6 +167,7 @@ public class Config {
      * Update the current value
      */
     protected V __get() throws IOException {
+      /*
       CloseableHttpClient client = null;
       HttpGet get;
       
@@ -212,7 +213,8 @@ public class Config {
         // close our client
         client.close();
       }
-      
+      */
+      return null;
     }
     
     /**
@@ -227,6 +229,7 @@ public class Config {
      * Update the current value
      */
     protected V __set(V value) throws IOException {
+      /*
       CloseableHttpClient client = null;
       HttpPut put;
       
@@ -279,7 +282,8 @@ public class Config {
         // close our client
         client.close();
       }
-      
+      */
+      return null;
     }
     
     /**
