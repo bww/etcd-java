@@ -166,9 +166,14 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
       HttpResponse response = executeRequest(get).get();
       
       // check out status code
-      int status;
-      if((status = response.getStatusLine().getStatusCode()) != 200){
-        invalidStatus(key.toString(), status);
+      int status = response.getStatusLine().getStatusCode();
+      switch(status){
+        case 200:
+          break;        // ok
+        case 404:
+          return null;  // not found
+        default:
+          invalidStatus(key.toString(), status);
       }
       
       // obtain our response entity
@@ -219,9 +224,13 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
       HttpResponse response = executeRequest(put).get();
       
       // check out status code
-      int status;
-      if((status = response.getStatusLine().getStatusCode()) != 200 && status != 201){
-        invalidStatus(key, status);
+      int status = response.getStatusLine().getStatusCode();
+      switch(status){
+        case 200:
+        case 201:
+          break;        // ok
+        default:
+          invalidStatus(key, status);
       }
       
       // obtain our response entity
@@ -284,7 +293,9 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
             throw new IOException("Etcd response contains no data");
           }
           
+          // propagate the value
           future.set(valueForEntity(entity));
+          
         }catch(Exception e){
           future.setException(e);
         }
