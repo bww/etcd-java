@@ -38,16 +38,22 @@ import java.util.Collection;
 import java.util.Arrays;
 import java.util.Collections;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+
 import org.apache.log4j.Logger;
 
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.FutureCallback;
 
 /**
  * A configuration.
  */
 public class Config {
   
-  private static final Logger logger = Logger.getLogger(Config.class.getName());
+  private static final Logger           logger    = Logger.getLogger(Config.class.getName());
+  private static final ExecutorService  executor  = Executors.newFixedThreadPool(1);
   
   protected final List<Provider> _providers;
   
@@ -121,8 +127,9 @@ public class Config {
    */
   public class Value <V> {
     
-    private String _key;
-    private V      _value;
+    private String              _key;
+    private V                   _value;
+    private ListenableFuture<V> _future;
     
     /**
      * Construct a configuration value with the specified key
@@ -134,14 +141,15 @@ public class Config {
     /**
      * Obtain the current value
      */
-    public V get() throws IOException {
-      return (V)Config.this.__get(_key);
+    public synchronized V get() throws IOException {
+      if(_value == null) _value = (V)Config.this.__get(_key);
+      return _value;
     }
     
     /**
      * Set the current value
      */
-    public V set(V value) throws IOException {
+    public synchronized V set(V value) throws IOException {
       Config.this.__set(_key, value);
       return (_value = (V)value);
     }
@@ -149,8 +157,28 @@ public class Config {
     /**
      * Monitor the current value
      */
-    public ListenableFuture<V> watch() throws IOException {
-      return Config.this.__watch(_key);
+    public synchronized ListenableFuture<V> watch() throws IOException {
+      if(_future == null){
+        _future = Config.this.__watch(_key);
+        Futures.addCallback(_future, new FutureCallback() {
+          
+          public void onSuccess(Object value) {
+            synchronized(Value.this){
+              Value.this._value = (V)value;
+              Value.this._future = null;
+            }
+          }
+          
+          public void onFailure(Throwable thrown) {
+            synchronized(Value.this){
+              Value.this._value = null;
+              Value.this._future = null;
+            }
+          }
+          
+        }, Config.this.executor);
+      }
+      return _future;
     }
     
   }
