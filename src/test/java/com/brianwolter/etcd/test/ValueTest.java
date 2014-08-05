@@ -75,5 +75,15 @@ public class ValueTest {
     System.err.println(value.get());
   }
   
+  @Test
+  public void testConversion() throws Exception {
+    Config config = new Config(new SystemProvider(), new EtcdProvider());
+    Config.Value<Boolean> asBool = config.get("test.bool.1", Boolean.class);
+    boolean value = asBool.set(true);
+    System.err.println(value);
+    value = asBool.get();
+    System.err.println(value);
+  }
+  
 }
 

@@ -187,7 +187,7 @@ public class Config {
             
             // update the state of this value first
             synchronized(Value.this){
-              Value.this._value = (V)value;
+              Value.this._value = Typecast.convert(value, Value.this._clazz);
               Value.this._future = null;
             }
             
