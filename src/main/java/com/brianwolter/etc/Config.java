@@ -48,7 +48,8 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.FutureCallback;
 
-import com.brianwolter.etc.util.Typecast;
+import com.brianwolter.etc.marshal.NativeMarshaler;
+import com.brianwolter.etc.marshal.TypecastMarshaler;
 
 /**
  * A configuration.
@@ -82,7 +83,7 @@ public class Config {
    * @return a configuration value representing the specified key
    */
   public Value get(String key) throws IOException {
-    return get(key, Object.class);
+    return get(key, new NativeMarshaler());
   }
   
   /**
@@ -92,7 +93,17 @@ public class Config {
    * @return a configuration value representing the specified key
    */
   public <V> Value<V> get(String key, Class<V> clazz) throws IOException {
-    return this.new Value<V>(key, clazz);
+    return get(key, new TypecastMarshaler<V>(clazz));
+  }
+  
+  /**
+   * Obtain a configuration value for the specified path.
+   * 
+   * @param key the configuration value key
+   * @return a configuration value representing the specified key
+   */
+  public <V> Value<V> get(String key, Marshaler<V> marshaler) throws IOException {
+    return this.new Value<V>(key, marshaler);
   }
   
   /**
@@ -139,23 +150,23 @@ public class Config {
   public class Value <V> {
     
     private String              _key;
-    private Class<V>            _clazz;
+    private Marshaler<V>        _marshaler;
     private V                   _value;
     private ListenableFuture<V> _future;
     
     /**
      * Construct a configuration value with the specified key
      */
-    protected Value(String key, Class<V> clazz) throws IOException {
+    protected Value(String key, Marshaler<V> marshaler) throws IOException {
       if((_key = key) == null || _key.isEmpty()) throw new IllegalArgumentException("Key must not be null or empty");
-      if((_clazz = clazz) == null) throw new IllegalArgumentException("Type must not be null");
+      if((_marshaler = marshaler) == null) throw new IllegalArgumentException("Marshaler must not be null");
     }
     
     /**
      * Obtain the current value
      */
     public synchronized V get() throws IOException {
-      if(_value == null) _value = Typecast.convert(Config.this.__get(_key), _clazz);
+      if(_value == null) _value = _marshaler.unmarshal(Config.this.__get(_key));
       return _value;
     }
     
@@ -163,7 +174,7 @@ public class Config {
      * Set the current value
      */
     public synchronized V set(V value) throws IOException {
-      Config.this.__set(_key, value);
+      Config.this.__set(_key, Value.this._marshaler.marshal(value));
       return (_value = value);
     }
     
@@ -184,16 +195,20 @@ public class Config {
         Futures.addCallback(inner, new FutureCallback() {
           
           public void onSuccess(Object value) {
-            
-            // update the state of this value first
-            synchronized(Value.this){
-              Value.this._value = Typecast.convert(value, Value.this._clazz);
-              Value.this._future = null;
+            try {
+              
+              // update the state of this value first
+              synchronized(Value.this){
+                Value.this._value = Value.this._marshaler.unmarshal(value);
+                Value.this._future = null;
+              }
+              
+              // the propagate the value to the caller
+              outer.set(value);
+              
+            }catch(Exception e){
+              outer.setException(e);
             }
-            
-            // the propagate the value to the caller
-            outer.set(value);
-            
           }
           
           public void onFailure(Throwable thrown) {

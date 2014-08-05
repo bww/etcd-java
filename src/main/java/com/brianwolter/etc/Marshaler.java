@@ -32,48 +32,20 @@ package com.brianwolter.etc;
 
 import java.io.IOException;
 
-import com.google.common.util.concurrent.ListenableFuture;
-
 /**
- * Implemented by configuration providers.
+ * Implemented by type marshalers
  */
-public interface Provider {
+public interface Marshaler <V> {
   
   /**
-   * Implemented by observable provdiers
+   * Unmarshal an object from it's external representation to its internal representation
    */
-  public static interface Observable extends Provider {
-    
-    /**
-     * Obtain a configuration value.
-     */
-    public Object get(final String key) throws IOException;
-    
-  }
+  public V unmarshal(Object o) throws IOException;
   
   /**
-   * Implemented by mutable provdiers
+   * Marshal an object from it's internal representation to its external representation
    */
-  public static interface Mutable extends Provider {
-    
-    /**
-     * Set a configuration value. Not all providers implement this method.
-     */
-    public Object set(final String key, final Object value) throws IOException;
-    
-  }
-  
-  /**
-   * Implemented by mutable provdiers
-   */
-  public static interface Monitorable extends Mutable {
-    
-    /**
-     * Watch a value for changes. Not all providers implement this method.
-     */
-    public ListenableFuture watch(final String key) throws IOException;
-    
-  }
+  public Object marshal(V o) throws IOException;
   
 }
 

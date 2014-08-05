@@ -28,51 +28,39 @@
 // OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-package com.brianwolter.etc;
+package com.brianwolter.etc.marshal;
 
 import java.io.IOException;
 
-import com.google.common.util.concurrent.ListenableFuture;
+import com.brianwolter.etc.Marshaler;
+import com.brianwolter.etc.util.Typecast;
 
 /**
- * Implemented by configuration providers.
+ * A primitive typecast marshaler
  */
-public interface Provider {
+public class TypecastMarshaler <V> implements Marshaler <V> {
+  
+  private Class<V> _clazz;
   
   /**
-   * Implemented by observable provdiers
+   * Construct with a target type
    */
-  public static interface Observable extends Provider {
-    
-    /**
-     * Obtain a configuration value.
-     */
-    public Object get(final String key) throws IOException;
-    
+  public TypecastMarshaler(Class<V> clazz) {
+    if((_clazz = clazz) == null) throw new IllegalArgumentException("Class must not be null");
   }
   
   /**
-   * Implemented by mutable provdiers
+   * Unmarshal an object from it's external representation to its internal representation
    */
-  public static interface Mutable extends Provider {
-    
-    /**
-     * Set a configuration value. Not all providers implement this method.
-     */
-    public Object set(final String key, final Object value) throws IOException;
-    
+  public V unmarshal(Object o) throws IOException {
+    return Typecast.convert(o, _clazz);
   }
   
   /**
-   * Implemented by mutable provdiers
+   * Marshal an object from it's internal representation to its external representation
    */
-  public static interface Monitorable extends Mutable {
-    
-    /**
-     * Watch a value for changes. Not all providers implement this method.
-     */
-    public ListenableFuture watch(final String key) throws IOException;
-    
+  public Object marshal(V o) throws IOException {
+    return String.valueOf(o);
   }
   
 }
