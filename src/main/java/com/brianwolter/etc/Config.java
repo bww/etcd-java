@@ -44,6 +44,7 @@ import java.util.concurrent.ExecutorService;
 import org.apache.log4j.Logger;
 
 import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.FutureCallback;
 
@@ -159,21 +160,41 @@ public class Config {
      */
     public synchronized ListenableFuture<V> watch() throws IOException {
       if(_future == null){
-        _future = Config.this.__watch(_key);
-        Futures.addCallback(_future, new FutureCallback() {
+        
+        // the inner future produced by the provider
+        ListenableFuture inner = Config.this.__watch(_key);
+        // the outer future this method returns
+        final SettableFuture outer = SettableFuture.create();
+        // the outer future is the future returned to callers
+        _future = outer;
+        
+        // watch the inner future for completion; update and produce our result on the outer future
+        Futures.addCallback(inner, new FutureCallback() {
           
           public void onSuccess(Object value) {
+            
+            // update the state of this value first
             synchronized(Value.this){
               Value.this._value = (V)value;
               Value.this._future = null;
             }
+            
+            // the propagate the value to the caller
+            outer.set(value);
+            
           }
           
           public void onFailure(Throwable thrown) {
+            
+            // update the state of this value first
             synchronized(Value.this){
               Value.this._value = null;
               Value.this._future = null;
             }
+            
+            // the propagate the exception to the caller
+            outer.setException(thrown);
+            
           }
           
         }, Config.this.executor);

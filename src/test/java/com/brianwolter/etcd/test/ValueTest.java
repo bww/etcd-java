@@ -56,8 +56,8 @@ public class ValueTest {
     EtcdProvider provider = new EtcdProvider();
     System.err.println(provider.get("test.1"));
     System.err.println(provider.set("test.1", "Hello again..."));
-    System.err.println(provider.set("test.2.3", "Another One"));
-    System.err.println(provider.set("test.2.escape%this@stuff", "Hello again..."));
+    System.err.println(provider.set("test.3.3", "Another One"));
+    System.err.println(provider.set("test.3.escape%this@stuff", "Hello again..."));
     
     ListenableFuture future = provider.watch("test.1");
     System.err.println(future.get());
