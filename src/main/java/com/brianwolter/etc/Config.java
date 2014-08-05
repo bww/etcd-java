@@ -48,6 +48,8 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.FutureCallback;
 
+import com.brianwolter.etc.util.Typecast;
+
 /**
  * A configuration.
  */
@@ -74,15 +76,23 @@ public class Config {
   }
   
   /**
-   * Obtain a configuration value for the specified path. The value is not actually looked up
-   * before the value is returned. The value itself manages interacting with the etcd service
-   * by lazily fetching values as needed.
+   * Obtain a configuration value for the specified path.
    * 
    * @param key the configuration value key
    * @return a configuration value representing the specified key
    */
   public Value get(String key) throws IOException {
-    return this.new Value(key);
+    return get(key, Object.class);
+  }
+  
+  /**
+   * Obtain a configuration value for the specified path.
+   * 
+   * @param key the configuration value key
+   * @return a configuration value representing the specified key
+   */
+  public <V> Value<V> get(String key, Class<V> clazz) throws IOException {
+    return this.new Value<V>(key, clazz);
   }
   
   /**
@@ -129,21 +139,23 @@ public class Config {
   public class Value <V> {
     
     private String              _key;
+    private Class<V>            _clazz;
     private V                   _value;
     private ListenableFuture<V> _future;
     
     /**
      * Construct a configuration value with the specified key
      */
-    protected Value(String key) throws IOException {
-      _key = key;
+    protected Value(String key, Class<V> clazz) throws IOException {
+      if((_key = key) == null || _key.isEmpty()) throw new IllegalArgumentException("Key must not be null or empty");
+      if((_clazz = clazz) == null) throw new IllegalArgumentException("Type must not be null");
     }
     
     /**
      * Obtain the current value
      */
     public synchronized V get() throws IOException {
-      if(_value == null) _value = (V)Config.this.__get(_key);
+      if(_value == null) _value = Typecast.convert(Config.this.__get(_key), _clazz);
       return _value;
     }
     
@@ -152,7 +164,7 @@ public class Config {
      */
     public synchronized V set(V value) throws IOException {
       Config.this.__set(_key, value);
-      return (_value = (V)value);
+      return (_value = value);
     }
     
     /**
@@ -163,7 +175,7 @@ public class Config {
         
         // the inner future produced by the provider
         ListenableFuture inner = Config.this.__watch(_key);
-        // the outer future this method returns
+        // the outer future managed by this method
         final SettableFuture outer = SettableFuture.create();
         // the outer future is the future returned to callers
         _future = outer;
