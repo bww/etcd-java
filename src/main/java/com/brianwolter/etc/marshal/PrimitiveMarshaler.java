@@ -36,16 +36,16 @@ import com.brianwolter.etc.Marshaler;
 import com.brianwolter.etc.util.Typecast;
 
 /**
- * A primitive typecast marshaler
+ * A primitive type marshaler
  */
-public class TypecastMarshaler <V> implements Marshaler <V> {
+public class PrimitiveMarshaler <V> implements Marshaler <V> {
   
   private Class<V> _clazz;
   
   /**
    * Construct with a target type
    */
-  public TypecastMarshaler(Class<V> clazz) {
+  public PrimitiveMarshaler(Class<V> clazz) {
     if((_clazz = clazz) == null) throw new IllegalArgumentException("Class must not be null");
   }
   

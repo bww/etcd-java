@@ -49,7 +49,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.FutureCallback;
 
 import com.brianwolter.etc.marshal.NativeMarshaler;
-import com.brianwolter.etc.marshal.TypecastMarshaler;
+import com.brianwolter.etc.marshal.PrimitiveMarshaler;
 
 /**
  * A configuration.
@@ -93,7 +93,7 @@ public class Config {
    * @return a configuration value representing the specified key
    */
   public <V> Value<V> get(String key, Class<V> clazz) throws IOException {
-    return get(key, new TypecastMarshaler<V>(clazz));
+    return get(key, new PrimitiveMarshaler<V>(clazz));
   }
   
   /**
