@@ -36,6 +36,7 @@ import java.io.InputStreamReader;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -153,7 +154,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
     HttpGet get;
     
     try {
-      get = new HttpGet(new URI("http", null, _host, _port, String.format("/v2/keys/%s", trimLeadingSlash(key)), null, null));
+      get = new HttpGet(new URI("http", null, _host, _port, String.format("/v2/keys/%s", keyToPath(key)), null, null));
     }catch(URISyntaxException e){
       throw new IOException(e);
     }
@@ -166,14 +167,13 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
       HttpResponse response = executeRequest(get).get();
       
       // check out status code
-      int status = response.getStatusLine().getStatusCode();
-      switch(status){
+      switch(response.getStatusLine().getStatusCode()){
         case 200:
           break;        // ok
         case 404:
           return null;  // not found
         default:
-          invalidStatus(key.toString(), status);
+          invalidStatus(key.toString(), response);
       }
       
       // obtain our response entity
@@ -207,7 +207,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
     String update = URLEncodedUtils.format(params, ENCODING);
     
     try {
-      put = new HttpPut(new URI("http", null, _host, _port, String.format("/v2/keys/%s", trimLeadingSlash(key)), null, null));
+      put = new HttpPut(new URI("http", null, _host, _port, String.format("/v2/keys/%s", keyToPath(key)), null, null));
     }catch(URISyntaxException e){
       throw new IOException(e);
     }
@@ -224,13 +224,12 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
       HttpResponse response = executeRequest(put).get();
       
       // check out status code
-      int status = response.getStatusLine().getStatusCode();
-      switch(status){
+      switch(response.getStatusLine().getStatusCode()){
         case 200:
         case 201:
           break;        // ok
         default:
-          invalidStatus(key, status);
+          invalidStatus(key, response);
       }
       
       // obtain our response entity
@@ -258,7 +257,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
   public ListenableFuture watch(final String key) throws IOException {
     try {
       final SettableFuture future = SettableFuture.create();
-      watch(key, new URI("http", null, _host, _port, String.format("/v2/keys/%s", trimLeadingSlash(key)), "wait=true", null), null, future);
+      watch(key, new URI("http", null, _host, _port, String.format("/v2/keys/%s", keyToPath(key)), "wait=true", null), null, future);
       return future;
     }catch(URISyntaxException e){
       throw new IOException(e);
@@ -282,9 +281,8 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
         try {
           
           // check out status code
-          int status;
-          if((status = response.getStatusLine().getStatusCode()) != 200){
-            invalidStatus(key.toString(), status);
+          if(response.getStatusLine().getStatusCode() != 200){
+            invalidStatus(key.toString(), response);
           }
           
           // obtain our response entity
@@ -340,8 +338,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
    * Obtain a value from the specified entity
    */
   private Object valueForEntity(HttpEntity entity) throws IOException {
-    Type type = new TypeToken<Map<String, Object>>(){}.getType();
-    Map<String, Object> content = GSON.fromJson(new InputStreamReader(entity.getContent(), ENCODING), type);
+    Map<String, Object> content = jsonForEntity(entity);
     List<Map<String, Object>> subnodes;
     Map<String, Object> node;
     
@@ -356,24 +353,34 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
   }
   
   /**
+   * Obtain an error from the specified entity
+   */
+  private String errorForEntity(HttpEntity entity) throws IOException {
+    Map<String, Object> content = jsonForEntity(entity);
+    StringBuffer sb = new StringBuffer();
+    Object temp;
+    sb.append(((temp = content.get("message")) != null) ? temp : "Undefined error");
+    if((temp = content.get("cause")) != null) sb.append(String.format(" (%s)", temp));
+    return sb.toString();
+  }
+  
+  /**
+   * Obtain an error from the specified entity
+   */
+  private Map<String, Object> jsonForEntity(HttpEntity entity) throws IOException {
+    Type type = new TypeToken<Map<String, Object>>(){}.getType();
+    return GSON.fromJson(new InputStreamReader(entity.getContent(), ENCODING), type);
+  }
+  
+  /**
    * Report an invalid status
    */
-  private void invalidStatus(String key, int status) throws IOException {
-    switch(status){
-      case 400:
-        throw new IOException(String.format("[%s] Invalid request", key));
-      case 401:
-        throw new IOException(String.format("[%s] Unauthorized", key));
-      case 403:
-        throw new IOException(String.format("[%s] Forbidden", key));
-      case 404:
-        throw new IOException(String.format("[%s] No such key", key));
-      case 422:
-        throw new IOException(String.format("[%s] Invalid request", key));
-      case 500:
-        throw new IOException(String.format("[%s] Etcd service error", key));
-      default:
-        throw new IOException(String.format("[%s] Etcd responded with an unexpected response code: %d", key, status));
+  private void invalidStatus(String key, HttpResponse response) throws IOException {
+    HttpEntity entity;
+    if((entity = response.getEntity()) != null){
+      throw new IOException(String.format("[%s] %s: %s", key, response.getStatusLine(), errorForEntity(response.getEntity())));
+    }else{
+      throw new IOException(String.format("[%s] %s", key, response.getStatusLine()));
     }
   }
   
@@ -381,7 +388,28 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
    * Convert a configuration key to an etcd path
    */
   private String keyToPath(String key) {
-    return null;
+    try {
+      StringBuffer sb = new StringBuffer();
+      
+      int p = 0;
+      for(int i = 0; i < key.length(); i++){
+        char c;
+        if((c = key.charAt(i)) == '.'){
+          if(i <= p) continue;
+          sb.append(URLEncoder.encode(key.substring(p, i), ENCODING));
+          sb.append('/');
+          p = i + 1;
+        }
+      }
+      
+      if(p < key.length()){
+        sb.append(key.substring(p));
+      }
+      
+      return sb.toString();
+    }catch(java.io.UnsupportedEncodingException e){
+      throw new RuntimeException(e);
+    }
   }
   
   /**

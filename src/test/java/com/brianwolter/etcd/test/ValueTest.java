@@ -52,32 +52,22 @@ public class ValueTest {
   
   @Test
   public void testEtcdProvider() throws Exception {
-    //ExecutorService executor = Executors.newFixedThreadPool(10);
     
     EtcdProvider provider = new EtcdProvider();
-    System.err.println(provider.get("test/1"));
-    System.err.println(provider.set("test/1", "Hello again..."));
+    System.err.println(provider.get("test.1"));
+    System.err.println(provider.set("test.1", "Hello again..."));
+    System.err.println(provider.set("test.2.3", "Another One"));
+    System.err.println(provider.set("test.2.escape%this@stuff", "Hello again..."));
     
-    ListenableFuture future = provider.watch("test/1");
+    ListenableFuture future = provider.watch("test.1");
     System.err.println(future.get());
-    
-    /*
-    Futures.addCallback(future, new FutureCallback() {
-      public void onSuccess(Object value) {
-        System.err.println("OK NOW: "+ value);
-      }
-      public void onFailure(Throwable thrown) {
-        System.err.println("YARP: "+ thrown);
-      }
-    }, executor);
-    */
     
   }
   
   @Test
   public void testValues() throws Exception {
     Config config = new Config(new SystemProvider(), new EtcdProvider());
-    Config.Value value = config.get("test/1");
+    Config.Value value = config.get("test.1");
     System.err.println(config.get("test.property").get());
     System.err.println(value.set(123));
     System.err.println(value.get());
