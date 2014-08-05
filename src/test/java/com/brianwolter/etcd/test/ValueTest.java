@@ -50,6 +50,8 @@ import com.brianwolter.etc.provider.SystemProvider;
  */
 public class ValueTest {
   
+  public static final Config config = new Config(new SystemProvider(), new EtcdProvider());
+  
   @Test
   public void testEtcdProvider() throws Exception {
     
@@ -66,7 +68,6 @@ public class ValueTest {
   
   @Test
   public void testValues() throws Exception {
-    Config config = new Config(new SystemProvider(), new EtcdProvider());
     Config.Value value = config.get("test.1");
     System.err.println(config.get("test.property").get());
     System.err.println(value.set(123));
@@ -77,7 +78,6 @@ public class ValueTest {
   
   @Test
   public void testConversion() throws Exception {
-    Config config = new Config(new SystemProvider(), new EtcdProvider());
     Config.Value<Boolean> asBool = config.get("test.bool.1", Boolean.class);
     boolean value = asBool.set(true);
     System.err.println(value);
