@@ -34,14 +34,19 @@ import static org.testng.Assert.*;
 
 import org.testng.annotations.Test;
 
+import java.util.List;
+import java.util.ArrayList;
+
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.CountDownLatch;
 
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.FutureCallback;
 
 import com.brianwolter.etc.Config;
+import com.brianwolter.etc.util.Property;
 import com.brianwolter.etc.provider.EtcdProvider;
 import com.brianwolter.etc.provider.SystemProvider;
 
@@ -50,47 +55,77 @@ import com.brianwolter.etc.provider.SystemProvider;
  */
 public class ValueTest {
   
-  public static final Config config = new Config(new SystemProvider(), new EtcdProvider());
+  private static final Config           config    = new Config(new SystemProvider(), new EtcdProvider());
+  private static final ExecutorService  executor  = Executors.newSingleThreadExecutor();
   
   @Test
-  public void testEtcdProvider() throws Exception {
-    
+  public void testEtcd() throws Exception {
     EtcdProvider provider = new EtcdProvider();
-    System.err.println(provider.get("test.1"));
-    System.err.println(provider.set("test.1", "Hello again..."));
-    System.err.println(provider.set("test.3.3", "Another One"));
-    System.err.println(provider.set("test.3.escape%this@stuff", "Hello again..."));
+    List<String> keys = new ArrayList<String>();
+    int base = 11, count = 5;
     
-    ListenableFuture future = provider.watch("test.1", null);
-    System.err.println(future.get());
+    for(int i = 0; i < count; i++){
+      keys.add(String.format("test.watch.%d", base + i));
+    }
+    
+    final CountDownLatch latch = new CountDownLatch(keys.size());
+    
+    for(String key : keys){
+      Futures.addCallback(provider.watch(key, null), new FutureCallback<Property>() {
+        public void onSuccess(Property property) {
+          System.err.println("--> "+ property);
+          latch.countDown();
+        }
+        public void onFailure(Throwable thrown) {
+          thrown.printStackTrace();
+          latch.countDown();
+        }
+      }, executor);
+    }
+    
+    latch.await();
     
   }
   
   @Test
-  public void testValues() throws Exception {
+  public void testGetSet() throws Exception {
     Config.Value value = config.get("test.1");
-    System.err.println(config.get("test.property").get());
-    System.err.println(value.set(123));
-    System.err.println(value.get());
-    System.err.println(value.watch().get());
-    System.err.println(value.get());
-    System.err.println(value.watch().get());
-    System.err.println(value);
+    System.err.println("--> "+ value.get());
+    System.err.println("--> "+ value.set("This is the new value now."));
+  }
+  
+  @Test
+  public void testMonitor() throws Exception {
+    List<Config.Value<String>> values = new ArrayList<Config.Value<String>>();
+    int base = 11, count = 5;
+    
+    for(int i = 0; i < count; i++){
+      values.add(config.get(String.format("test.watch.%d", base + i), String.class));
+    }
+    
+    final CountDownLatch latch = new CountDownLatch(values.size());
+    
+    for(Config.Value<String> value : values){
+      Futures.addCallback(value.watch(), new FutureCallback<String>() {
+        public void onSuccess(String value) {
+          System.err.println("--> "+ value);
+          latch.countDown();
+        }
+        public void onFailure(Throwable thrown) {
+          thrown.printStackTrace();
+          latch.countDown();
+        }
+      }, executor);
+    }
+    
+    latch.await();
+    
   }
   
   @Test
   public void testNotFound() throws Exception {
     Config.Value value = config.get("test.invalid");
-    System.err.println(value.get());
-  }
-  
-  @Test
-  public void testConversion() throws Exception {
-    Config.Value<Boolean> asBool = config.get("test.bool.1", Boolean.class);
-    boolean value = asBool.set(true);
-    System.err.println(value);
-    value = asBool.get();
-    System.err.println(value);
+    System.err.println("--> "+ value.get());
   }
   
 }

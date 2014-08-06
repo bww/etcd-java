@@ -128,8 +128,8 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
     }
     
     RequestConfig requestConfig = RequestConfig.custom()
+      .setConnectTimeout(1000)
       .setSocketTimeout(requestTimeout)
-      .setConnectTimeout(requestTimeout)
       .setConnectionRequestTimeout(requestTimeout)
       .build();
     
@@ -291,7 +291,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
   protected void watch(final String key, final URI uri, final Date until, final SettableFuture future) {
     
     // setup our request
-    HttpGet get = new HttpGet(uri);
+    final HttpGet get = new HttpGet(uri);
     // note it for debugging
     logger.debug(get);
     
@@ -304,6 +304,8 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
           // check out status code
           if(response.getStatusLine().getStatusCode() != 200){
             invalidStatus(key.toString(), response);
+          }else{
+            logger.debug(get +": "+ response.getStatusLine());
           }
           
           // obtain our response entity
@@ -312,8 +314,13 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
             throw new IOException("Etcd response contains no data");
           }
           
-          // propagate the value
-          future.set(resultForEntity(entity));
+          // check that we have a valid result and respond
+          Result result;
+          if((result = resultForEntity(entity)) != null){
+            future.set(result);
+          }else{
+            EtcdProvider.this.watch(key, uri, until, future);
+          }
           
         }catch(Exception e){
           future.setException(e);
@@ -366,7 +373,12 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
    * Obtain a result from the specified entity
    */
   private Result resultForEntity(HttpEntity entity) throws IOException {
-    Map<String, Object> content = jsonForEntity(entity);
+    
+    Map<String, Object> content;
+    if((content = jsonForEntity(entity)) == null){
+      return null;
+    }
+    
     List<Map<String, Object>> subnodes;
     Map<String, Object> node;
     long index = 0;
