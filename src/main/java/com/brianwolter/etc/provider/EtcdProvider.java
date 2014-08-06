@@ -177,8 +177,10 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
       // check out status code
       switch(response.getStatusLine().getStatusCode()){
         case 200:
+          logger.debug(get +": "+ response.getStatusLine());
           break;        // ok
         case 404:
+          logger.debug(get +": "+ response.getStatusLine());
           return null;  // not found
         default:
           invalidStatus(key.toString(), response);
@@ -235,6 +237,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
       switch(response.getStatusLine().getStatusCode()){
         case 200:
         case 201:
+          logger.debug(put +": "+ response.getStatusLine());
           break;        // ok
         default:
           invalidStatus(key, response);
@@ -269,12 +272,8 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
       List<NameValuePair> params = new ArrayList<NameValuePair>();
       params.add(new BasicNameValuePair("wait", "true"));
       
-      if(previous != null){
-        if(previous instanceof Result){
-          params.add(new BasicNameValuePair("waitIndex", String.valueOf(((Result)previous).nextIndex())));
-        }else{
-          throw new IOException("Previous mutation context is not an "+ Result.class.getName());
-        }
+      if(previous != null && previous instanceof Result){
+        params.add(new BasicNameValuePair("waitIndex", String.valueOf(((Result)previous).nextIndex())));
       }
       
       String query = URLEncodedUtils.format(params, ENCODING);

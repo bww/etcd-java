@@ -79,6 +79,12 @@ public class ValueTest {
   }
   
   @Test
+  public void testNotFound() throws Exception {
+    Config.Value value = config.get("test.invalid");
+    System.err.println(value.get());
+  }
+  
+  @Test
   public void testConversion() throws Exception {
     Config.Value<Boolean> asBool = config.get("test.bool.1", Boolean.class);
     boolean value = asBool.set(true);
