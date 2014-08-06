@@ -82,7 +82,7 @@ public class Config {
    * @param key the configuration value key
    * @return a configuration value representing the specified key
    */
-  public Value get(String key) throws IOException {
+  public Value get(String key) {
     return get(key, new NativeMarshaler());
   }
   
@@ -92,7 +92,7 @@ public class Config {
    * @param key the configuration value key
    * @return a configuration value representing the specified key
    */
-  public <V> Value<V> get(String key, Class<V> clazz) throws IOException {
+  public <V> Value<V> get(String key, Class<V> clazz) {
     return get(key, new PrimitiveMarshaler<V>(clazz));
   }
   
@@ -102,7 +102,7 @@ public class Config {
    * @param key the configuration value key
    * @return a configuration value representing the specified key
    */
-  public <V> Value<V> get(String key, Class<V> clazz, V ifnull) throws IOException {
+  public <V> Value<V> get(String key, Class<V> clazz, V ifnull) {
     return get(key, new PrimitiveMarshaler<V>(clazz), ifnull);
   }
   
@@ -112,7 +112,7 @@ public class Config {
    * @param key the configuration value key
    * @return a configuration value representing the specified key
    */
-  public <V> Value<V> get(String key, Marshaler<V> marshaler) throws IOException {
+  public <V> Value<V> get(String key, Marshaler<V> marshaler) {
     return get(key, marshaler, null);
   }
   
@@ -122,7 +122,7 @@ public class Config {
    * @param key the configuration value key
    * @return a configuration value representing the specified key
    */
-  public <V> Value<V> get(String key, Marshaler<V> marshaler, V ifnull) throws IOException {
+  public <V> Value<V> get(String key, Marshaler<V> marshaler, V ifnull) {
     return this.new Value<V>(key, marshaler, ifnull);
   }
   
@@ -185,7 +185,7 @@ public class Config {
     /**
      * Construct a configuration value with the specified key
      */
-    protected Value(String key, Marshaler<V> marshaler, V ifnull) throws IOException {
+    protected Value(String key, Marshaler<V> marshaler, V ifnull) {
       if((_key = key) == null || _key.isEmpty()) throw new IllegalArgumentException("Key must not be null or empty");
       if((_marshaler = marshaler) == null) throw new IllegalArgumentException("Marshaler must not be null");
       _ifnull = ifnull;
@@ -194,73 +194,80 @@ public class Config {
     /**
      * Obtain the current value
      */
-    public synchronized V get() throws IOException {
+    public synchronized V get() throws ConfigException {
       return get(null);
     }
     
     /**
      * Obtain the current value
      */
-    public synchronized V get(V ifnull) throws IOException {
-      if(_value == null) _value = _marshaler.unmarshal(Config.this.__get(_key, (_ifnull != null) ? _ifnull : ifnull));
-      return _value;
+    public synchronized V get(V ifnull) throws ConfigException {
+      try {
+        if(_value == null) _value = _marshaler.unmarshal(Config.this.__get(_key, (_ifnull != null) ? _ifnull : ifnull));
+        return _value;
+      }catch(IOException e){
+        throw new ConfigException("Could not get configuration value: "+ this, e);
+      }
     }
     
     /**
      * Set the current value
      */
-    public synchronized V set(V value) throws IOException {
-      Config.this.__set(_key, Value.this._marshaler.marshal(value));
-      return (_value = value);
+    public synchronized V set(V value) throws ConfigException {
+      try {
+        Config.this.__set(_key, Value.this._marshaler.marshal(value));
+        return (_value = value);
+      }catch(IOException e){
+        throw new ConfigException("Could not set configuration value: "+ this, e);
+      }
     }
     
     /**
      * Monitor the current value
      */
-    public synchronized ListenableFuture<V> watch() throws IOException {
+    public synchronized ListenableFuture<V> watch() throws ConfigException {
       if(_future == null){
-        
-        // the inner future produced by the provider
-        ListenableFuture inner = Config.this.__watch(_key);
-        // the outer future managed by this method
-        final SettableFuture outer = SettableFuture.create();
-        // the outer future is the future returned to callers
-        _future = outer;
-        
-        // watch the inner future for completion; update and produce our result on the outer future
-        Futures.addCallback(inner, new FutureCallback() {
+        try {
           
-          public void onSuccess(Object value) {
-            try {
-              
+          // the inner future produced by the provider
+          ListenableFuture inner = Config.this.__watch(_key);
+          // the outer future managed by this method
+          final SettableFuture outer = SettableFuture.create();
+          // the outer future is the future returned to callers
+          _future = outer;
+          
+          // watch the inner future for completion; update and produce our result on the outer future
+          Futures.addCallback(inner, new FutureCallback() {
+            
+            public void onSuccess(Object value) {
+              try {
+                // update the state of this value first
+                synchronized(Value.this){
+                  Value.this._value = Value.this._marshaler.unmarshal(value);
+                  Value.this._future = null;
+                }
+                // the propagate the value to the caller
+                outer.set(value);
+              }catch(Exception e){
+                outer.setException(e);
+              }
+            }
+            
+            public void onFailure(Throwable thrown) {
               // update the state of this value first
               synchronized(Value.this){
-                Value.this._value = Value.this._marshaler.unmarshal(value);
+                Value.this._value = null;
                 Value.this._future = null;
               }
-              
-              // the propagate the value to the caller
-              outer.set(value);
-              
-            }catch(Exception e){
-              outer.setException(e);
-            }
-          }
-          
-          public void onFailure(Throwable thrown) {
-            
-            // update the state of this value first
-            synchronized(Value.this){
-              Value.this._value = null;
-              Value.this._future = null;
+              // the propagate the exception to the caller
+              outer.setException(thrown);
             }
             
-            // the propagate the exception to the caller
-            outer.setException(thrown);
-            
-          }
+          }, Config.this.executor);
           
-        }, Config.this.executor);
+        }catch(IOException e){
+          throw new ConfigException("Could not watch configuration value: "+ this, e);
+        }
       }
       return _future;
     }

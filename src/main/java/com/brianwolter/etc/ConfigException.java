@@ -33,7 +33,7 @@ package com.brianwolter.etc;
 /**
  * Base config exception.
  */
-public class ConfigException extends java.lang.Exception {
+public class ConfigException extends java.lang.RuntimeException {
   
   /**
    * Construct with no information
