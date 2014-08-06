@@ -102,14 +102,34 @@ public class Config {
    * @param key the configuration value key
    * @return a configuration value representing the specified key
    */
+  public <V> Value<V> get(String key, Class<V> clazz, V ifnull) throws IOException {
+    return get(key, new PrimitiveMarshaler<V>(clazz), ifnull);
+  }
+  
+  /**
+   * Obtain a configuration value for the specified path.
+   * 
+   * @param key the configuration value key
+   * @return a configuration value representing the specified key
+   */
   public <V> Value<V> get(String key, Marshaler<V> marshaler) throws IOException {
-    return this.new Value<V>(key, marshaler);
+    return get(key, marshaler, null);
+  }
+  
+  /**
+   * Obtain a configuration value for the specified path.
+   * 
+   * @param key the configuration value key
+   * @return a configuration value representing the specified key
+   */
+  public <V> Value<V> get(String key, Marshaler<V> marshaler, V ifnull) throws IOException {
+    return this.new Value<V>(key, marshaler, ifnull);
   }
   
   /**
    * Obtain the value for the specified key from the first provider which defines one.
    */
-  protected Object __get(String key) throws IOException {
+  protected Object __get(String key, Object ifnull) throws IOException {
     Object value = null;
     for(Provider provider : _providers){
       if(provider instanceof Provider.Observable){
@@ -118,7 +138,7 @@ public class Config {
         }
       }
     }
-    return value;
+    return value != null ? value : ifnull;
   }
   
   /**
@@ -145,28 +165,44 @@ public class Config {
   }
   
   /**
+   * String description
+   */
+  public String toString() {
+    return String.format("<Config %s>", _providers);
+  }
+  
+  /**
    * A configuration value
    */
   public class Value <V> {
     
     private String              _key;
     private Marshaler<V>        _marshaler;
+    private V                   _ifnull;
     private V                   _value;
     private ListenableFuture<V> _future;
     
     /**
      * Construct a configuration value with the specified key
      */
-    protected Value(String key, Marshaler<V> marshaler) throws IOException {
+    protected Value(String key, Marshaler<V> marshaler, V ifnull) throws IOException {
       if((_key = key) == null || _key.isEmpty()) throw new IllegalArgumentException("Key must not be null or empty");
       if((_marshaler = marshaler) == null) throw new IllegalArgumentException("Marshaler must not be null");
+      _ifnull = ifnull;
     }
     
     /**
      * Obtain the current value
      */
     public synchronized V get() throws IOException {
-      if(_value == null) _value = _marshaler.unmarshal(Config.this.__get(_key));
+      return get(null);
+    }
+    
+    /**
+     * Obtain the current value
+     */
+    public synchronized V get(V ifnull) throws IOException {
+      if(_value == null) _value = _marshaler.unmarshal(Config.this.__get(_key, (_ifnull != null) ? _ifnull : ifnull));
       return _value;
     }
     
@@ -227,6 +263,13 @@ public class Config {
         }, Config.this.executor);
       }
       return _future;
+    }
+    
+    /**
+     * String description
+     */
+    public String toString() {
+      return String.format("'%s' in %s", _key, Config.this);
     }
     
   }

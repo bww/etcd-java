@@ -52,5 +52,12 @@ public class SystemProvider implements Provider.Observable {
     return System.getProperty(key);
   }
   
+  /**
+   * String description
+   */
+  public String toString() {
+    return "system";
+  }
+  
 }
 

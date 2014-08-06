@@ -424,5 +424,12 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
     return new String();
   }
   
+  /**
+   * String description
+   */
+  public String toString() {
+    return String.format("etcd@%s:%s", _host, _port);
+  }
+  
 }
 
