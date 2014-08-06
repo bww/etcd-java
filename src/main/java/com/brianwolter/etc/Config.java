@@ -78,6 +78,36 @@ public class Config {
   }
   
   /**
+   * Determine if at least one provider is observable.
+   */
+  public boolean isObservable() {
+    for(Provider provider : _providers){
+      if(provider instanceof Provider.Observable) return true;
+    }
+    return false;
+  }
+  
+  /**
+   * Determine if at least one provider is mutable.
+   */
+  public boolean isMutable() {
+    for(Provider provider : _providers){
+      if(provider instanceof Provider.Mutable) return true;
+    }
+    return false;
+  }
+  
+  /**
+   * Determine if at least one provider is monitorable.
+   */
+  public boolean isMonitorable() {
+    for(Provider provider : _providers){
+      if(provider instanceof Provider.Monitorable) return true;
+    }
+    return false;
+  }
+  
+  /**
    * Obtain a configuration value for the specified path.
    * 
    * @param key the configuration value key
@@ -211,6 +241,7 @@ public class Config {
         if(_value == null){
           if((_previous = Config.this.__get(_key)) != null){
             _value = _marshaler.unmarshal(_previous.value());
+            if(_autoupdate) monitor();
           }else{
             _value = (_ifnull != null) ? _ifnull : ifnull;
           }
@@ -230,6 +261,7 @@ public class Config {
         if((property = Config.this.__set(_key, _marshaler.marshal(value))) != null){
           _value = _marshaler.unmarshal(property.value());
           _previous = property;
+          if(_autoupdate) monitor();
         }else{
           _value = value;
         }
@@ -240,13 +272,12 @@ public class Config {
     }
     
     /**
-     * Begin auto-updating this value
+     * Mark this value for auto-updating. The value will begin monitoring itself after
+     * it is first accessed.
      */
-    public synchronized Value<V> auto() throws ConfigException {
+    public synchronized Value<V> autoUpdate() throws ConfigException {
       // mark as auto-updating
       _autoupdate = true;
-      // begin monitoring
-      monitor();
       // return this value, for chaining
       return this;
     }
@@ -257,8 +288,13 @@ public class Config {
     private synchronized void monitor() throws ConfigException {
       if(_monitor == null){
         try {
+          
           // create our monitor future by watching our key
-          _monitor = Config.this.__watch(_key, _previous);
+          if((_monitor = Config.this.__watch(_key, _previous)) == null){
+            // no monitorable providers; just return, we don't throw an exception
+            return;
+          }
+          
           // process callbacks
           Futures.addCallback(_monitor, new FutureCallback<Property>() {
             public void onSuccess(Property mutation) {
@@ -268,6 +304,7 @@ public class Config {
               Value.this.failed(thrown);
             }
           }, Config.this.executor);
+          
         }catch(IOException e){
           throw new ConfigException("Could not monitor configuration value: "+ this, e);
         }

@@ -115,11 +115,18 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
    * Construct
    */
   public EtcdProvider(String host, int port) {
+    String stemp;
     
     if((_host = host) == null || _host.isEmpty()) throw new IllegalArgumentException("Etcd server host is invalid");
     _port = (port <= 0) ? 4001 : port;
     
-    int requestTimeout = 60 * 1000;
+    int requestTimeout;
+    if((stemp = System.getProperty("etc.provider.etcd.timeout")) != null && !stemp.isEmpty()){
+      requestTimeout = Integer.valueOf(stemp) * 1000;
+    }else{
+      requestTimeout = 60 * 60 * 1000;
+    }
+    
     RequestConfig requestConfig = RequestConfig.custom()
       .setSocketTimeout(requestTimeout)
       .setConnectTimeout(requestTimeout)
