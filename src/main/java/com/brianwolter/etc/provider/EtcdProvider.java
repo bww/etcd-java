@@ -78,6 +78,7 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import com.brianwolter.etc.Provider;
+import com.brianwolter.etc.util.Property;
 
 /**
  * Etcd provider.
@@ -150,7 +151,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
   /**
    * Obtain a configuration value.
    */
-  public Object get(final String key) throws IOException {
+  public Property get(final String key) throws IOException {
     HttpGet get;
     
     try {
@@ -183,7 +184,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
       }
       
       // return the canonical value
-      return valueForEntity(entity);
+      return resultForEntity(entity);
       
     }catch(IOException e){
       throw e;
@@ -198,7 +199,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
   /**
    * Set a configuration value.
    */
-  public Object set(final String key, final Object value) throws IOException {
+  public Property set(final String key, final Object value) throws IOException {
     HttpPut put;
     
     // our value
@@ -239,7 +240,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
       }
       
       // return the canonical value
-      return valueForEntity(entity);
+      return resultForEntity(entity);
       
     }catch(IOException e){
       throw e;
@@ -254,10 +255,24 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
   /**
    * Watch a value for changes.
    */
-  public ListenableFuture watch(final String key) throws IOException {
+  public ListenableFuture watch(final String key, final Property previous) throws IOException {
     try {
       final SettableFuture future = SettableFuture.create();
-      watch(key, new URI("http", null, _host, _port, String.format("/v2/keys/%s", keyToPath(key)), "wait=true", null), null, future);
+      
+      List<NameValuePair> params = new ArrayList<NameValuePair>();
+      params.add(new BasicNameValuePair("wait", "true"));
+      
+      if(previous != null){
+        if(previous instanceof Result){
+          params.add(new BasicNameValuePair("waitIndex", String.valueOf(((Result)previous).nextIndex())));
+        }else{
+          throw new IOException("Previous mutation context is not an "+ Result.class.getName());
+        }
+      }
+      
+      String query = URLEncodedUtils.format(params, ENCODING);
+      watch(key, new URI("http", null, _host, _port, String.format("/v2/keys/%s", keyToPath(key)), query, null), null, future);
+      
       return future;
     }catch(URISyntaxException e){
       throw new IOException(e);
@@ -292,7 +307,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
           }
           
           // propagate the value
-          future.set(valueForEntity(entity));
+          future.set(resultForEntity(entity));
           
         }catch(Exception e){
           future.setException(e);
@@ -338,18 +353,30 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
    * Obtain a value from the specified entity
    */
   private Object valueForEntity(HttpEntity entity) throws IOException {
+    return resultForEntity(entity).value();
+  }
+  
+  /**
+   * Obtain a result from the specified entity
+   */
+  private Result resultForEntity(HttpEntity entity) throws IOException {
     Map<String, Object> content = jsonForEntity(entity);
     List<Map<String, Object>> subnodes;
     Map<String, Object> node;
+    long index = 0;
     
     if((subnodes = (List<Map<String, Object>>)content.get("nodes")) != null){
       throw new IOException("Directory nodes are not supported");
-    }else if((node = (Map<String, Object>)content.get("node")) != null){
-      return node.get("value");
-    }else{
+    }else if((node = (Map<String, Object>)content.get("node")) == null){
       throw new IOException("Invalid node");
     }
     
+    Number number;
+    if((number = (Number)node.get("modifiedIndex")) != null){
+      index = number.longValue();
+    }
+    
+    return new Result(node.get("value"), index, index + 1);
   }
   
   /**
@@ -429,6 +456,47 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
    */
   public String toString() {
     return String.format("etcd@%s:%s", _host, _port);
+  }
+  
+  /**
+   * A watched value
+   */
+  public static class Result implements Property {
+    
+    private Object  _value;
+    private long    _valueIndex;
+    private long    _nextIndex;
+    
+    /**
+     * Construct with a value and indices
+     */
+    public Result(Object value, long valueIndex, long nextIndex) {
+      _value = value;
+      _valueIndex = valueIndex;
+      _nextIndex = nextIndex;
+    }
+    
+    /**
+     * Obtain the mutated value
+     */
+    public Object value() {
+      return _value;
+    }
+    
+    /**
+     * Obtain the value index
+     */
+    public long valueIndex() {
+      return _valueIndex;
+    }
+    
+    /**
+     * Obtain the next value index
+     */
+    public long nextIndex() {
+      return _nextIndex;
+    }
+    
   }
   
 }

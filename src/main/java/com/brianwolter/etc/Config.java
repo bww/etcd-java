@@ -50,6 +50,7 @@ import com.google.common.util.concurrent.FutureCallback;
 
 import com.brianwolter.etc.marshal.NativeMarshaler;
 import com.brianwolter.etc.marshal.PrimitiveMarshaler;
+import com.brianwolter.etc.util.Property;
 
 /**
  * A configuration.
@@ -129,36 +130,37 @@ public class Config {
   /**
    * Obtain the value for the specified key from the first provider which defines one.
    */
-  protected Object __get(String key, Object ifnull) throws IOException {
-    Object value = null;
+  protected Property __get(String key) throws IOException {
+    Property property = null;
     for(Provider provider : _providers){
       if(provider instanceof Provider.Observable){
-        if((value = ((Provider.Observable)provider).get(key)) != null){
+        if((property = ((Provider.Observable)provider).get(key)) != null){
           break;
         }
       }
     }
-    return value != null ? value : ifnull;
+    return property;
   }
   
   /**
-   * Set a value for the specified key in all mutable providers.
+   * Set a value for the specified key in the first mutable provider.
    */
-  protected void __set(String key, Object value) throws IOException {
+  protected Property __set(String key, Object value) throws IOException {
     for(Provider provider : _providers){
       if(provider instanceof Provider.Mutable){
-        ((Provider.Mutable)provider).set(key, value);
+        return ((Provider.Mutable)provider).set(key, value);
       }
     }
+    return null;
   }
   
   /**
    * Watch the value for the specified key on the first monitorable provider.
    */
-  protected ListenableFuture __watch(String key) throws IOException {
+  protected ListenableFuture<Property> __watch(String key, Property previous) throws IOException {
     for(Provider provider : _providers){
       if(provider instanceof Provider.Monitorable){
-        return ((Provider.Monitorable)provider).watch(key);
+        return ((Provider.Monitorable)provider).watch(key, previous);
       }
     }
     return null;
@@ -176,11 +178,14 @@ public class Config {
    */
   public class Value <V> {
     
-    private String              _key;
-    private Marshaler<V>        _marshaler;
-    private V                   _ifnull;
-    private V                   _value;
-    private ListenableFuture<V> _future;
+    private String                      _key;
+    private Marshaler<V>                _marshaler;
+    private V                           _ifnull;
+    private V                           _value;
+    private boolean                     _autoupdate;
+    private Property                    _previous;
+    private ListenableFuture<Property>  _monitor;
+    private SettableFuture<V>           _watcher;
     
     /**
      * Construct a configuration value with the specified key
@@ -203,7 +208,13 @@ public class Config {
      */
     public synchronized V get(V ifnull) throws ConfigException {
       try {
-        if(_value == null) _value = _marshaler.unmarshal(Config.this.__get(_key, (_ifnull != null) ? _ifnull : ifnull));
+        if(_value == null){
+          if((_previous = Config.this.__get(_key)) != null){
+            _value = _marshaler.unmarshal(_previous.value());
+          }else{
+            _value = (_ifnull != null) ? _ifnull : ifnull;
+          }
+        }
         return _value;
       }catch(IOException e){
         throw new ConfigException("Could not get configuration value: "+ this, e);
@@ -215,61 +226,117 @@ public class Config {
      */
     public synchronized V set(V value) throws ConfigException {
       try {
-        Config.this.__set(_key, Value.this._marshaler.marshal(value));
-        return (_value = value);
+        Property property;
+        if((property = Config.this.__set(_key, _marshaler.marshal(value))) != null){
+          _value = _marshaler.unmarshal(property.value());
+          _previous = property;
+        }else{
+          _value = value;
+        }
+        return _value;
       }catch(IOException e){
         throw new ConfigException("Could not set configuration value: "+ this, e);
       }
     }
     
     /**
+     * Begin auto-updating this value
+     */
+    public synchronized Value<V> auto() throws ConfigException {
+      // mark as auto-updating
+      _autoupdate = true;
+      // begin monitoring
+      monitor();
+      // return this value, for chaining
+      return this;
+    }
+    
+    /**
+     * Begin monitoring this value.
+     */
+    private synchronized void monitor() throws ConfigException {
+      if(_monitor == null){
+        try {
+          // create our monitor future by watching our key
+          _monitor = Config.this.__watch(_key, _previous);
+          // process callbacks
+          Futures.addCallback(_monitor, new FutureCallback<Property>() {
+            public void onSuccess(Property mutation) {
+              Value.this.update(mutation);
+            }
+            public void onFailure(Throwable thrown) {
+              Value.this.failed(thrown);
+            }
+          }, Config.this.executor);
+        }catch(IOException e){
+          throw new ConfigException("Could not monitor configuration value: "+ this, e);
+        }
+      }
+    }
+    
+    /**
+     * Update the value.
+     */
+    private synchronized void update(Property mutation) throws ConfigException {
+      
+      try {
+        _value = _marshaler.unmarshal(mutation.value());
+      }catch(IOException e){
+        throw new ConfigException("Could not unmarshal value", e);
+      }
+      
+      // update the context mutation
+      _previous = mutation;
+      // clear this monitor, it just completed
+      _monitor = null;
+      // if we're auto-updating begin monitoring again
+      if(_autoupdate) monitor();
+      
+      // process the watcher future if we have one
+      SettableFuture watcher;
+      if((watcher = _watcher) != null){
+        // clear it first
+        _watcher = null;
+        // propagate the value
+        watcher.set(_value);
+      }
+      
+    }
+    
+    /**
+     * Update failed
+     */
+    private synchronized void failed(Throwable thrown) throws ConfigException {
+      
+      // clear our value? it's invalid
+      _value = null;
+      // clear the monitor, it just completed
+      _monitor = null;
+      // if we're auto-updating begin monitoring again
+      if(_autoupdate) monitor();
+      
+      // process the watcher future if we have one
+      SettableFuture watcher;
+      if((watcher = _watcher) != null){
+        // clear it first
+        _watcher = null;
+        // propagate the exception
+        watcher.setException(thrown);
+      }
+      
+    }
+    
+    /**
      * Monitor the current value
      */
     public synchronized ListenableFuture<V> watch() throws ConfigException {
-      if(_future == null){
-        try {
-          
-          // the inner future produced by the provider
-          ListenableFuture inner = Config.this.__watch(_key);
-          // the outer future managed by this method
-          final SettableFuture outer = SettableFuture.create();
-          // the outer future is the future returned to callers
-          _future = outer;
-          
-          // watch the inner future for completion; update and produce our result on the outer future
-          Futures.addCallback(inner, new FutureCallback() {
-            
-            public void onSuccess(Object value) {
-              try {
-                // update the state of this value first
-                synchronized(Value.this){
-                  Value.this._value = Value.this._marshaler.unmarshal(value);
-                  Value.this._future = null;
-                }
-                // the propagate the value to the caller
-                outer.set(value);
-              }catch(Exception e){
-                outer.setException(e);
-              }
-            }
-            
-            public void onFailure(Throwable thrown) {
-              // update the state of this value first
-              synchronized(Value.this){
-                Value.this._value = null;
-                Value.this._future = null;
-              }
-              // the propagate the exception to the caller
-              outer.setException(thrown);
-            }
-            
-          }, Config.this.executor);
-          
-        }catch(IOException e){
-          throw new ConfigException("Could not watch configuration value: "+ this, e);
-        }
+      if(_watcher == null){
+        // create our watcher future, which is shared
+        _watcher = SettableFuture.create();
+        // begin monitoring
+        monitor();
       }
-      return _future;
+      return _watcher;
     }
     
     /**

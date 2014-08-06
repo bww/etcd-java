@@ -61,7 +61,7 @@ public class ValueTest {
     System.err.println(provider.set("test.3.3", "Another One"));
     System.err.println(provider.set("test.3.escape%this@stuff", "Hello again..."));
     
-    ListenableFuture future = provider.watch("test.1");
+    ListenableFuture future = provider.watch("test.1", null);
     System.err.println(future.get());
     
   }
@@ -74,6 +74,7 @@ public class ValueTest {
     System.err.println(value.get());
     System.err.println(value.watch().get());
     System.err.println(value.get());
+    System.err.println(value.watch().get());
     System.err.println(value);
   }
   

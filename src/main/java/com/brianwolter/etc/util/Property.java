@@ -28,65 +28,17 @@
 // OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-package com.brianwolter.etc.provider;
-
-import java.io.IOException;
-
-import org.apache.log4j.Logger;
-
-import com.google.common.util.concurrent.ListenableFuture;
-
-import com.brianwolter.etc.Provider;
-import com.brianwolter.etc.util.Property;
+package com.brianwolter.etc.util;
 
 /**
- * System provider.
+ * A property represents a value as produced by a Provider.
  */
-public class SystemProvider implements Provider.Observable {
-  
-  private static final Logger logger = Logger.getLogger(SystemProvider.class.getName());
+public interface Property {
   
   /**
-   * Obtain a configuration value.
+   * Obtain the mutated value.
    */
-  public Property get(final String key) throws IOException {
-    Object value;
-    if((value = System.getProperty(key)) != null){
-      return new SystemProperty(value);
-    }else{
-      return null;
-    }
-  }
-  
-  /**
-   * String description
-   */
-  public String toString() {
-    return "system";
-  }
-  
-  /**
-   * A system property
-   */
-  public static class SystemProperty implements Property {
-    
-    private Object _value;
-    
-    /**
-     * Construct with a value
-     */
-    public SystemProperty(Object value) {
-      _value = value;
-    }
-    
-    /**
-     * Obtain the value
-     */
-    public Object value() {
-      return _value;
-    }
-    
-  }
+  public Object value();
   
 }
 

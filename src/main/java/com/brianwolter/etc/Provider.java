@@ -34,6 +34,8 @@ import java.io.IOException;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
+import com.brianwolter.etc.util.Property;
+
 /**
  * Implemented by configuration providers.
  */
@@ -47,7 +49,7 @@ public interface Provider {
     /**
      * Obtain a configuration value.
      */
-    public Object get(final String key) throws IOException;
+    public Property get(final String key) throws IOException;
     
   }
   
@@ -59,7 +61,7 @@ public interface Provider {
     /**
      * Set a configuration value. Not all providers implement this method.
      */
-    public Object set(final String key, final Object value) throws IOException;
+    public Property set(final String key, final Object value) throws IOException;
     
   }
   
@@ -71,7 +73,7 @@ public interface Provider {
     /**
      * Watch a value for changes. Not all providers implement this method.
      */
-    public ListenableFuture watch(final String key) throws IOException;
+    public ListenableFuture<Property> watch(final String key, final Property previous) throws IOException;
     
   }
   
