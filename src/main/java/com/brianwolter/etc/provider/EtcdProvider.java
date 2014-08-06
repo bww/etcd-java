@@ -124,7 +124,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
     if((stemp = System.getProperty("etc.provider.etcd.timeout")) != null && !stemp.isEmpty()){
       requestTimeout = Integer.valueOf(stemp) * 1000;
     }else{
-      requestTimeout = 60 * 60 * 1000;
+      requestTimeout = 60 * 5 * 1000;
     }
     
     RequestConfig requestConfig = RequestConfig.custom()
@@ -432,7 +432,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
   /**
    * Convert a configuration key to an etcd path
    */
-  private String keyToPath(String key) {
+  public static String keyToPath(String key) {
     try {
       StringBuffer sb = new StringBuffer();
       
@@ -460,7 +460,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
   /**
    * Strip off leading '/' from a path
    */
-  private String trimLeadingSlash(String path) {
+  public static String trimLeadingSlash(String path) {
     for(int i = 0; i < path.length(); i++){
       if(path.charAt(i) != '/'){
         return path.substring(i);
