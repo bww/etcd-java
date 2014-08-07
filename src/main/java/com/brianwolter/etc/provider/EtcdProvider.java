@@ -127,6 +127,13 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
       requestTimeout = 60 * 5 * 1000;
     }
     
+    int concurrentConnections;
+    if((stemp = System.getProperty("etc.provider.etcd.maxconn")) != null && !stemp.isEmpty()){
+      concurrentConnections = Integer.valueOf(stemp);
+    }else{
+      concurrentConnections = 1024; // use a large number by default; we only have one route
+    }
+    
     RequestConfig requestConfig = RequestConfig.custom()
       .setConnectTimeout(1000)
       .setSocketTimeout(requestTimeout)
@@ -135,6 +142,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
     
     _httpclient = HttpAsyncClients.custom()
       .setDefaultRequestConfig(requestConfig)
+      .setMaxConnPerRoute(concurrentConnections)
       .build();
     
     _httpclient.start();

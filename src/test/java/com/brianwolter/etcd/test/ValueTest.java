@@ -79,8 +79,7 @@ public class ValueTest {
   private static final Config           config    = new Config(new SystemProvider(), new EtcdProvider());
   private static final ExecutorService  executor  = Executors.newSingleThreadExecutor();
   
-  
-  @Test
+  //@Test
   public void testAsyncHTTP() throws Exception {
     List<String> keys = new ArrayList<String>();
     int base = 11, count = 5;
@@ -92,11 +91,11 @@ public class ValueTest {
     RequestConfig requestConfig = RequestConfig.custom()
       .setConnectTimeout(1000)
       .setSocketTimeout(60 * 6 * 1000)
-      .setConnectionRequestTimeout(60 * 6 * 1000)
       .build();
     
-    final CloseableHttpAsyncClient httpclient = HttpAsyncClients.custom()
+    CloseableHttpAsyncClient httpclient = HttpAsyncClients.custom()
       .setDefaultRequestConfig(requestConfig)
+      .setMaxConnPerRoute(6)
       .build();
     
     httpclient.start();
@@ -137,7 +136,7 @@ public class ValueTest {
     
   }
   
-  @Test
+  //@Test
   public void testEtcd() throws Exception {
     EtcdProvider provider = new EtcdProvider();
     List<String> keys = new ArrayList<String>();
@@ -176,7 +175,7 @@ public class ValueTest {
   @Test
   public void testMonitor() throws Exception {
     List<Config.Value<String>> values = new ArrayList<Config.Value<String>>();
-    int base = 11, count = 5;
+    int base = 11, count = 3;
     
     for(int i = 0; i < count; i++){
       values.add(config.get(String.format("test.watch.%d", base + i), String.class));
