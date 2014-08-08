@@ -12,9 +12,9 @@
 //     this list of conditions and the following disclaimer in the documentation
 //     and/or other materials provided with the distribution.
 //     
-//   * Neither the names of Brian William Wolter, Wolter Group New York, nor the
-//     names of its contributors may be used to endorse or promote products derived
-//     from this software without specific prior written permission.
+//   * Neither the name of Brian William Wolter nor the names of the contributors
+//     may be used to endorse or promote products derived from this software without
+//     specific prior written permission.
 //     
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
 // ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -28,48 +28,17 @@
 // OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-package com.brianwolter.etcd;
+package com.brianwolter.etc.util;
 
 /**
- * Base config exception.
+ * A property represents a value as produced by a Provider.
  */
-public class ConfigException extends java.lang.Exception {
+public interface Property {
   
   /**
-   * Construct with no information
+   * Obtain the mutated value.
    */
-  public ConfigException(){
-    super();
-  }
-  
-  /**
-   * Construct with a message describing the exception.
-   * 
-   * @param m the message
-   */
-  public ConfigException(String m){
-    super(m);
-  }
-  
-  /**
-   * Construct with a message describing the exception and a root exception from
-   * which this originated.
-   * 
-   * @param m the message
-   * @param e the root exception
-   */
-  public ConfigException(String m, Throwable e){
-    super(m, e);
-  }
-  
-  /**
-   * Construct with a root exception from which this exception originated.
-   * 
-   * @param e the root exception
-   */
-  public ConfigException(Throwable e){
-    super(e);
-  }
+  public Object value();
   
 }
 
