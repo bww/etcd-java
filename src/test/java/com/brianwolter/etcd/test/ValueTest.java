@@ -45,6 +45,7 @@ public class ValueTest {
   public void testValues() throws Exception {
     Config config = new Config("localhost");
     Config.Value value = config.get("test/1");
+    value.get();
     value.set(123);
     value.get();
   }

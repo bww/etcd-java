@@ -62,6 +62,9 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 
+import org.apache.http.impl.nio.client.HttpAsyncClients;
+import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
+
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
