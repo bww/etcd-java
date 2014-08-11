@@ -166,7 +166,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
   /**
    * Obtain a configuration value.
    */
-  public Property get(final String key) throws IOException {
+  public Property get(final String key) throws IOException, InterruptedException {
     HttpGet get;
     
     try {
@@ -203,6 +203,8 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
       // return the canonical value
       return resultForEntity(entity);
       
+    }catch(InterruptedException e){
+      throw e;
     }catch(IOException e){
       throw e;
     }catch(Exception e){
@@ -216,7 +218,7 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
   /**
    * Set a configuration value.
    */
-  public Property set(final String key, final Object value) throws IOException {
+  public Property set(final String key, final Object value) throws IOException, InterruptedException {
     HttpPut put;
     
     // our value
@@ -260,6 +262,8 @@ public class EtcdProvider implements Provider.Observable, Provider.Mutable, Prov
       // return the canonical value
       return resultForEntity(entity);
       
+    }catch(InterruptedException e){
+      throw e;
     }catch(IOException e){
       throw e;
     }catch(Exception e){

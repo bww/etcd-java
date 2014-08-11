@@ -49,7 +49,7 @@ public class SystemProvider implements Provider.Observable {
   /**
    * Obtain a configuration value.
    */
-  public Property get(final String key) throws IOException {
+  public Property get(final String key) throws IOException, InterruptedException {
     Object value;
     if((value = System.getProperty(key)) != null){
       return new SystemProperty(value);

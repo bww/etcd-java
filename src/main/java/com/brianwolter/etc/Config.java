@@ -164,8 +164,10 @@ public class Config {
     Property property = null;
     for(Provider provider : _providers){
       if(provider instanceof Provider.Observable){
-        if((property = ((Provider.Observable)provider).get(key)) != null){
-          break;
+        try {
+          if((property = ((Provider.Observable)provider).get(key)) != null) break;
+        }catch(InterruptedException e){
+          continue; // try the next one, I guess?
         }
       }
     }
@@ -178,7 +180,11 @@ public class Config {
   protected Property __set(String key, Object value) throws IOException {
     for(Provider provider : _providers){
       if(provider instanceof Provider.Mutable){
-        return ((Provider.Mutable)provider).set(key, value);
+        try {
+          return ((Provider.Mutable)provider).set(key, value);
+        }catch(InterruptedException e){
+          continue; // try the next one, I guess?
+        }
       }
     }
     return null;

@@ -49,7 +49,7 @@ public interface Provider {
     /**
      * Obtain a configuration value.
      */
-    public Property get(final String key) throws IOException;
+    public Property get(final String key) throws IOException, InterruptedException;
     
   }
   
@@ -61,7 +61,7 @@ public interface Provider {
     /**
      * Set a configuration value. Not all providers implement this method.
      */
-    public Property set(final String key, final Object value) throws IOException;
+    public Property set(final String key, final Object value) throws IOException, InterruptedException;
     
   }
   
